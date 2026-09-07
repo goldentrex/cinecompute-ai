@@ -193,9 +193,12 @@ st.markdown(
 st.markdown('<div class="label">Ask the agent</div>', unsafe_allow_html=True)
 if getattr(st.session_state.agent, 'setup_error', None):
     st.warning(
-        'Live questions are unavailable on this deployment - the recorded \n'
+        'Live questions are unavailable on this deployment - the recorded '
         'analyses below still work and show the real SQL the agent wrote.'
     )
+    # the message names the misconfiguration; it never contains the credential
+    with st.expander("Why live questions are off"):
+        st.code(st.session_state.agent.setup_error)
 
 # --------------------------------------------------------------------------
 # Ask
