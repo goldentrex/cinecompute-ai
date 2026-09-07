@@ -6,7 +6,7 @@ from google.genai import types
 from app.config import settings
 from app.agent.mcp_client import ClickHouseMCP, run_async
 from app.agent.prompts import SYSTEM_INSTRUCTION
-from app.agent import cache
+from app.agent import cache, model_state
 
 # The tool list is no longer written here: it is discovered from the ClickHouse
 # MCP server at `tools/list`, so the agent can only call what the server offers.
@@ -30,6 +30,7 @@ FALLBACK_MODELS = [
     "gemini-3-flash-preview",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
+    "gemini-3.1-flash-lite-preview",
 ]
 
 
@@ -66,7 +67,18 @@ def _wrap_mcp_result(name, args, payload, elapsed_ms, failed):
 
 class CineComputeAgent:
     def __init__(self, model_name: str = None):
-        self.client = genai.Client(api_key=settings.gemini_api_key)
+        # Vertex AI when a Google Cloud project is configured (no per-model free
+        # quota), otherwise the AI Studio endpoint with an API key.
+        if settings.google_genai_use_vertexai and settings.google_cloud_project:
+            self.client = genai.Client(
+                vertexai=True,
+                project=settings.google_cloud_project,
+                location=settings.google_cloud_location,
+            )
+            self.backend = "vertex"
+        else:
+            self.client = genai.Client(api_key=settings.gemini_api_key)
+            self.backend = "ai-studio"
         self.model_name = model_name or settings.gemini_model
         self.system_instruction = SYSTEM_INSTRUCTION
         self.history = []
@@ -89,15 +101,28 @@ class CineComputeAgent:
             return "transient"
         return "fatal"
 
+    def candidates(self):
+        """Preferred model first, then fallbacks, skipping today's known-dry ones.
+
+        Vertex has no per-model free quota, so the memo only applies to AI Studio.
+        The preferred model is always tried, even if marked, in case quota reset.
+        """
+        ordered = [self.model_name] + [m for m in FALLBACK_MODELS if m != self.model_name]
+        if self.backend != "ai-studio":
+            return ordered
+        dry = model_state.exhausted()
+        live = [m for m in ordered if m not in dry or m == ordered[0]]
+        return live or ordered
+
     def _generate(self, contents, config):
         """generate_content with one retry, then failover to an alternate model.
 
-        A model that is out of quota (429) or retired (404) is gone for the day,
-        so the session sticks to whichever fallback works. A capacity blip (503)
-        is not a reason to spend the rest of the demo on a weaker model, so that
-        switch is temporary and the preferred model is tried again next turn.
+        A model that is out of quota (429) or retired (404) is gone for the day and
+        is remembered as such, so later turns do not pay for the discovery again. A
+        capacity blip (503) is retried once and does not permanently downgrade the
+        session.
         """
-        candidates = [self.model_name] + [m for m in FALLBACK_MODELS if m != self.model_name]
+        candidates = self.candidates()
         preferred = candidates[0]
         last_exc = None
         sticky = True
@@ -108,6 +133,7 @@ class CineComputeAgent:
                     response = self.client.models.generate_content(
                         model=model, contents=contents, config=config
                     )
+                    model_state.clear(model)
                     if model != self.model_name and sticky:
                         self.model_name = model
                     return response
@@ -119,6 +145,8 @@ class CineComputeAgent:
                     if kind == "transient" and attempt == 0:
                         time.sleep(self.RETRY_DELAY_SEC)
                         continue  # same model, one more go
+                    if kind in ("quota", "retired") and self.backend == "ai-studio":
+                        model_state.mark_exhausted(model)
                     if model == preferred and kind == "transient":
                         sticky = False
                     break

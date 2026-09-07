@@ -14,7 +14,7 @@ if PROJECT_ROOT in sys.path:
     sys.path.remove(PROJECT_ROOT)
 sys.path.insert(0, PROJECT_ROOT)
 
-from app.agent import cache
+from app.agent import cache, model_state
 from app.agent.gemini_client import CineComputeAgent
 from app.config import settings
 from app.ui import theme
@@ -363,8 +363,9 @@ with st.expander("Show the numbers behind this"):
     st.dataframe(h, width="stretch", hide_index=True)
 
 st.markdown(
-    f'<div class="foot">Gemini <code>{st.session_state.agent.model_name}</code> writing its own '
-    f'read-only SQL against ClickHouse · dashboard computed in '
+    f'<div class="foot">Gemini <code>{st.session_state.agent.model_name}</code> '
+    f'({st.session_state.agent.backend}) writing its own read-only SQL, reaching '
+    f'ClickHouse only through the official MCP server · dashboard computed in '
     f'{timing["total_ms"]:.0f} ms of engine time over {timing["rows_scanned"]:,} rows'
     + (f' · {max(0, LIVE_QUESTION_BUDGET - st.session_state.live_calls)} live questions left'
        if PUBLIC_DEMO else '')

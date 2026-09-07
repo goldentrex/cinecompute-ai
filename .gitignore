@@ -8,6 +8,8 @@ venv/
 htmlcov/
 
 .agent_cache/
+# recorded runs are force-added on purpose; this per-machine, per-day file never is
+.agent_cache/model_state.json
 
 .streamlit/secrets.toml
 .env.backup*
