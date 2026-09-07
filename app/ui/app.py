@@ -96,7 +96,8 @@ def render_log(log, expanded=False):
     res = log["result"]
     head = f"{log['tool']}"
     if res.get("latency_ms") is not None:
-        head += f" · {res['latency_ms']} ms in ClickHouse"
+        # this is the MCP call round-trip, not ClickHouse's own execution time
+        head += f" · {res['latency_ms']} ms via MCP"
         if res.get("rows_scanned"):
             head += f" · {res['rows_scanned']:,} rows scanned"
     with st.expander(head, expanded=expanded):

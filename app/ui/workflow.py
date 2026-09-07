@@ -108,7 +108,7 @@ def render(phase="idle", queries=0, total_ms=0.0, last_label=""):
     if queries:
         parts.append(
             f'<text x="{W - PAD_X}" y="{H - 10}" text-anchor="end" class="wf-badge">'
-            f'{queries} quer{"y" if queries == 1 else "ies"} · {total_ms:.0f} ms in ClickHouse</text>'
+            f'{queries} quer{"y" if queries == 1 else "ies"} · {total_ms:.0f} ms via MCP</text>'
         )
     parts.append("</svg>")
     return "".join(parts)
