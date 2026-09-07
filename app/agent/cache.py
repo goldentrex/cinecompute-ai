@@ -72,9 +72,12 @@ def list_cached():
             try:
                 with open(os.path.join(CACHE_DIR, name), encoding="utf-8") as fh:
                     d = json.load(fh)
-                out.append((d.get("question", ""), d.get("recorded_at", ""), d.get("model", "")))
             except (OSError, ValueError):
                 continue
+            # the directory also holds model_state.json, which is not a run
+            if not isinstance(d, dict) or not d.get("question"):
+                continue
+            out.append((d["question"], d.get("recorded_at", ""), d.get("model", "")))
     except OSError:
         pass
     return out
