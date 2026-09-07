@@ -399,6 +399,61 @@ if answer_msg:
 # --------------------------------------------------------------------------
 st.markdown("<hr>", unsafe_allow_html=True)
 
+# --------------------------------------------------------------------------
+# Act on it: a sweep nobody asked for, and the fix it implies
+# --------------------------------------------------------------------------
+st.markdown('<div class="label">Act on it</div>', unsafe_allow_html=True)
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def farm_audit():
+    from app.remediation import audit, policy_json
+    incidents = audit()
+    return incidents, policy_json(incidents)
+
+
+act_left, act_right = st.columns([1, 1])
+if act_left.button("Audit the whole farm", width="stretch"):
+    st.session_state.show_audit = True
+
+try:
+    _incidents, _policy = farm_audit()
+except Exception as _e:                       # never break the page over this
+    _incidents, _policy = None, None
+    act_right.caption(f"Audit unavailable: {str(_e)[:60]}")
+
+if _policy is not None:
+    act_right.download_button(
+        "Download the scheduler policy", _policy,
+        file_name="cinecompute-remediation.json", mime="application/json",
+        width="stretch",
+    )
+
+if st.session_state.get("show_audit") and _incidents is not None:
+    import json as _json
+    _n = len(_incidents)
+    _rec = _json.loads(_policy)["recoverable_usd"]
+    st.markdown(
+        f'<div class="callout">Swept every project x sequence x software x GPU slice '
+        f'of the farm. <b>{_n} systemic incidents</b> account for '
+        f'<b>${_rec:,.0f}</b> of recoverable spend. No question was asked and no model '
+        f'was involved - this is SQL over the telemetry.</div>',
+        unsafe_allow_html=True,
+    )
+    _table = _incidents[["sequence_id", "software", "gpu_model", "all_jobs",
+                         "failure_rate", "wasted_usd", "dominant_failure", "severity"]]
+    _table.columns = ["Sequence", "Software", "GPU", "Jobs", "Failure %",
+                      "Wasted $", "Dominant failure", "Severity"]
+    st.dataframe(_table, width="stretch", hide_index=True)
+    with st.expander("The scheduler policy this implies"):
+        st.caption(
+            "Each rule carries the counts that justify it. Generated from the "
+            "telemetry by SQL, so it cannot contain an invented figure."
+        )
+        st.code(_policy, language="json")
+
+st.markdown("<hr>", unsafe_allow_html=True)
+
 with st.expander("Show the numbers behind this"):
     st.markdown(
         f'<div class="cards">'

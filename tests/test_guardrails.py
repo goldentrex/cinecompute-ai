@@ -40,3 +40,26 @@ def test_engine_metrics_never_reach_the_model():
     """rows_scanned was once reported as a business figure; keep it UI-only."""
     from app.agent.gemini_client import UI_ONLY_KEYS
     assert {"latency_ms", "rows_scanned", "roundtrip_ms"} <= UI_ONLY_KEYS
+
+
+def test_remediation_policy_never_invents_a_figure():
+    """Every rule must carry counts that come from the sweep, not from a model."""
+    import pytest
+
+    from app.config import settings
+    if not settings.clickhouse_password:
+        pytest.skip("no ClickHouse credentials")
+
+    from app.remediation import audit, policy
+
+    incidents = audit()
+    doc = policy(incidents)
+
+    assert doc["rules"], "the farm has known systemic faults; none were turned into rules"
+    for rule in doc["rules"]:
+        assert rule["reason"], "a rule without evidence is an assertion"
+        assert rule["recovers_usd"] > 0
+        assert rule["match"]["sequence"] in set(incidents["sequence_id"])
+    # the headline must be the sum of the parts, not a separate claim
+    assert abs(doc["recoverable_usd"]
+               - round(sum(r["recovers_usd"] for r in doc["rules"]), 2)) < 0.01
