@@ -71,6 +71,44 @@ def render_answer(text: str):
             st.markdown(money_safe(body))
 
 
+def render_verification(verdicts, summary):
+    """A second agent re-derived each figure from the database. Show the result."""
+    if not summary or not summary.get("checked"):
+        return
+
+    confirmed, checked = summary["confirmed"], summary["checked"]
+    contradicted = summary.get("contradicted", 0)
+    colour = theme.GAIN if contradicted == 0 else theme.LOSS
+    label = (f"{confirmed} of {checked} figures re-derived from the database"
+             if contradicted == 0 else
+             f"{confirmed} of {checked} re-derived, {contradicted} did not match "
+             f"the check query")
+
+    st.markdown(
+        f'<div class="verif" style="border-color:{colour}">'
+        f'<span class="vdot" style="background:{colour}"></span>'
+        f'<b>Checked by a second agent</b> · {label}</div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("See each check"):
+        st.caption(
+            "The verifier is never shown the figure it is checking. It writes one "
+            "query per claim, the query runs against ClickHouse through MCP, and the "
+            "comparison is arithmetic - no model decides whether a number is right. "
+            "A mismatch (≠) means the check did not reproduce the figure: read the "
+            "query, since it can also mean the check measured something slightly "
+            "different."
+        )
+        for v in verdicts:
+            mark = {"confirmed": "✓", "contradicted": "≠", "unchecked": "–"}[v["status"]]
+            found = f'{v["found"]:,.2f}' if v["found"] is not None else "not reproducible"
+            st.markdown(
+                f'`{mark}` **{v["claim"]}** — re-derived: {found}'.replace("$", r"\$")
+            )
+            st.code(v["sql"], language="sql")
+
+
 def render_steps(logs, as_html=False):
     """What the agent asked the database, and how fast it answered."""
     if not logs:
@@ -316,13 +354,16 @@ if prompt:
     turn_start = len(st.session_state.mcp_logs)
     _paint("thinking", "Sending the question to Gemini")
     answer = st.session_state.agent.process_message(
-        prompt, tool_callback=mcp_callback, no_cache=is_live_probe)
+        prompt, tool_callback=mcp_callback, no_cache=is_live_probe,
+        verify=is_live_probe)
     _paint("answering", "Writing the analysis")
     st.session_state.messages.append({
         "role": "assistant",
         "content": answer,
         "replayed": getattr(st.session_state.agent, "replayed", False),
         "steps": st.session_state.mcp_logs[turn_start:],
+        "verdicts": getattr(st.session_state.agent, "verdicts", []),
+        "verification": getattr(st.session_state.agent, "verification", {}),
     })
     st.rerun()
 
@@ -345,6 +386,7 @@ if answer_msg:
     st.markdown(f'<div class="label">Answering · {question}</div>', unsafe_allow_html=True)
     render_steps(_done_steps)
     render_answer(answer_msg["content"])
+    render_verification(answer_msg.get("verdicts") or [], answer_msg.get("verification") or {})
     if answer_msg.get("replayed"):
         st.caption("Replayed from a recorded run — no API quota used.")
 

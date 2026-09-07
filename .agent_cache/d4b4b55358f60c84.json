@@ -2,7 +2,7 @@
   "question": "Which sequences are exceeding their production budget, what is driving the overspend, and what should the pipeline change?",
   "answer": "### 1. Root Cause Analysis (Technical)\nTwo sequences are currently exceeding their production budgets due to distinct technical failures:\n\n*   **SEQ_010_SPACE_BATTLE**: The primary driver is **OOM_KILLED** errors on high-tier 80GB nodes (NVIDIA H100 and A100_80GB). Telemetry shows a p95 VRAM usage of **79.82 GB**, indicating that Houdini Karma tasks are hitting the physical memory ceiling of the studio's most powerful hardware. This has resulted in 4,689 failed jobs on 80GB cards alone.\n*   **SEQ_045_UNDERWATER**: This sequence is suffering from a massive **DRIVER_CRASH** epidemic specifically on **NVIDIA_L40S** nodes. While other GPU models (A100, H100) show high success rates, the L40S nodes have a ~63% failure rate (12,827 crashes vs. 7,566 successes). The crashes occur at a p95 VRAM of **40.22 GB**, well within the L40S's 48GB capacity, suggesting a kernel-level incompatibility with the underwater shaders or volumetric solvers.\n\n### 2. Financial & Schedule Impact\nThe total financial impact across these two sequences is significant:\n\n*   **SEQ_010_SPACE_BATTLE**:\n    *   **Total Spend**: $120,461.22 vs. Budget of $74,685.96.\n    *   **Overrun**: **$45,775.26 (61.3%)**.\n    *   **Wasted Spend**: $20,968.97 (17.4% of total spend) lost to failed renders.\n*   **SEQ_045_UNDERWATER**:\n    *   **Total Spend**: $152,915.24 vs. Budget of $134,565.41.\n    *   **Overrun**: **$18,349.83 (13.6%)**.\n    *   **Wasted Spend**: **$65,285.03 (42.7% of total spend)**. The high waste figure indicates that while the sequence is only slightly over budget, it has consumed nearly half its resources on non-productive compute.\n\n### 3. Prescriptive Action Plan\nTo stabilize the budget and restore pipeline throughput, the following actions are required:\n\n*   **Immediate Resource Routing**: Blacklist **NVIDIA_L40S** nodes for all `SEQ_045_UNDERWATER` tasks in the farm scheduler. Redirect these jobs to A100_80GB or RTX4090 nodes where the driver stability is confirmed.\n*   **Memory Optimization (SEQ_010)**: The Space Battle sequence is too heavy for current hardware. The Lighting/FX department must:\n    *   Reduce volumetric voxel density or step size for background explosions.\n    *   Implement aggressive frustum culling for high-poly ship assets.\n    *   Downsample 8K UDIM textures to 4K for non-hero assets to drop VRAM below the 70GB safety threshold.\n*   **Driver Investigation**: Task the Pipeline TD team to investigate the L40S driver version (specifically regarding OptiX or Vulkan interop) to resolve the `DRIVER_CRASH` issues, as these nodes are currently unusable for the underwater sequence.",
   "model": "gemini-3-flash-preview",
-  "recorded_at": "2026-09-08 01:57:23",
+  "recorded_at": "2026-09-08 03:55:53",
   "tool_calls": [
     {
       "name": "run_query",
@@ -32,5 +32,66 @@
       },
       "result": "{\"latency_ms\": 99.7, \"columns\": [\"gpu_model\", \"status\", \"jobs\", \"cost\", \"p95_vram\"], \"row_count\": 16, \"data\": [{\"gpu_model\": \"NVIDIA_L40S\", \"status\": \"SUCCESS\", \"jobs\": 18170, \"cost\": 25244.81, \"p95_vram\": 38.99}, {\"gpu_model\": \"NVIDIA_A100_80GB\", \"status\": \"SUCCESS\", \"jobs\": 18040, \"cost\": 24877.62, \"p95_vram\": 65.02}, {\"gpu_model\": \"NVIDIA_RTX4090\", \"status\": \"SUCCESS\", \"jobs\": 18011, \"cost\": 24767.62, \"p95_vram\": 19.62}, {\"gpu_model\": \"NVIDIA_H100\", \"status\": \"SUCCESS\", \"jobs\": 17974, \"cost\": 24602.2, \"p95_vram\": 64.81}, {\"gpu_model\": \"NVIDIA_H100\", \"status\": \"OOM_KILLED\", \"jobs\": 2393, \"cost\": 5987.29, \"p95_vram\": 79.82}, {\"gpu_model\": \"NVIDIA_A100_80GB\", \"status\": \"OOM_KILLED\", \"jobs\": 2296, \"cost\": 5693.37, \"p95_vram\": 79.82}, {\"gpu_model\": \"NVIDIA_RTX4090\", \"status\": \"OOM_KILLED\", \"jobs\": 691, \"cost\": 970.79, \"p95_vram\": 23.96}, {\"gpu_model\": \"NVIDIA_RTX4090\", \"status\": \"DRIVER_CRASH\", \"jobs\": 708, \"cost\": 962.02, \"p95_vram\": 19.7}, {\"gpu_model\": \"NVIDIA_H100\", \"status\": \"TIMEOUT\", \"jobs\": 680, \"cost\": 950.14, \"p95_vram\": 65.67}, {\"gpu_model\": \"NVIDIA_L40S\", \"status\": \"OOM_KILLED\", \"jobs\": 685, \"cost\": 943.11, \"p95_vram\": 47.88}, {\"gpu_model\": \"NVIDIA_H100\", \"status\": \"DRIVER_CRASH\", \"jobs\": 669, \"cost\": 940.8, \"p95_vram\": 65.29}, {\"gpu_model\": \"NVIDIA_L40S\", \"status\": \"DRIVER_CRASH\", \"jobs\": 655, \"cost\": 918.01, \"p95_vram\": 38.98}, {\"gpu_model\": \"NVIDIA_RTX4090\", \"status\": \"TIMEOUT\", \"jobs\": 625, \"cost\": 910.17, \"p95_vram\": 19.48}, {\"gpu_model\": \"NVIDIA_A100_80GB\", \"status\": \"TIMEOUT\", \"jobs\": 651, \"cost\": 905.42, \"p95_vram\": 64.72}, {\"gpu_model\": \"NVIDIA_L40S\", \"status\": \"TIMEOUT\", \"jobs\": 612, \"cost\": 904.48, \"p95_vram\": 39.05}, {\"gpu_model\": \"NVIDIA_A100_80GB\", \"status\": \"DRIVER_CRASH\", \"jobs\": 625, \"cost\": 883.39, \"p95_vram\": 65.5}], \"raw_query\": \"SELECT \\n    gpu_model,\\n    status,\\n    count() AS jobs,\\n    round(sum(cost_usd), 2) AS cost,\\n    round(quantile(0.95)(vram_peak_gb), 2) AS p95_vram\\nFROM cinecompute.vfx_render_events\\nWHERE sequence_id = 'SEQ_010_SPACE_BATTLE'\\nGROUP BY gpu_model, status\\nORDER BY cost DESC\"}"
     }
-  ]
+  ],
+  "verdicts": [
+    {
+      "claim": "12,827",
+      "context": "While other GPU models (A100, H100) show high success rates, the L40S nodes have a ~63% failure rate (12,827 crashes vs.",
+      "checking": "DRIVER_CRASH count for SEQ_045_UNDERWATER on NVIDIA_L40S",
+      "expected": 12827.0,
+      "found": 12827.0,
+      "status": "confirmed",
+      "sql": "SELECT count() FROM cinecompute.vfx_render_events WHERE sequence_id = 'SEQ_045_UNDERWATER' AND gpu_model = 'NVIDIA_L40S' AND status = 'DRIVER_CRASH'"
+    },
+    {
+      "claim": "7,566",
+      "context": "7,566 successes).",
+      "checking": "SUCCESS count for SEQ_045_UNDERWATER on NVIDIA_L40S",
+      "expected": 7566.0,
+      "found": 7566.0,
+      "status": "confirmed",
+      "sql": "SELECT count() FROM cinecompute.vfx_render_events WHERE sequence_id = 'SEQ_045_UNDERWATER' AND gpu_model = 'NVIDIA_L40S' AND status = 'SUCCESS'"
+    },
+    {
+      "claim": "120,461.22",
+      "context": "* **Total Spend**: $120,461.22 vs.",
+      "checking": "total spend for SEQ_010_SPACE_BATTLE",
+      "expected": 120461.22,
+      "found": 120461.22387089254,
+      "status": "confirmed",
+      "sql": "SELECT sum(cost_usd) FROM cinecompute.vfx_render_events WHERE sequence_id = 'SEQ_010_SPACE_BATTLE'"
+    },
+    {
+      "claim": "74,685.96",
+      "context": "Budget of $74,685.96.",
+      "checking": "allocated budget for SEQ_010_SPACE_BATTLE",
+      "expected": 74685.96,
+      "found": 74685.96,
+      "status": "confirmed",
+      "sql": "SELECT allocated_budget_usd FROM cinecompute.production_budgets WHERE sequence_id = 'SEQ_010_SPACE_BATTLE'"
+    },
+    {
+      "claim": "20,968.97",
+      "context": "* **Wasted Spend**: $20,968.97 (17.",
+      "checking": "wasted spend for SEQ_010_SPACE_BATTLE",
+      "expected": 20968.97,
+      "found": 20968.96872944804,
+      "status": "confirmed",
+      "sql": "SELECT sumIf(cost_usd, status != 'SUCCESS') FROM cinecompute.vfx_render_events WHERE sequence_id = 'SEQ_010_SPACE_BATTLE'"
+    },
+    {
+      "claim": "152,915.24",
+      "context": "* **Total Spend**: $152,915.24 vs.",
+      "checking": "total spend for SEQ_045_UNDERWATER",
+      "expected": 152915.24,
+      "found": 152915.2376171928,
+      "status": "confirmed",
+      "sql": "SELECT sum(cost_usd) FROM cinecompute.vfx_render_events WHERE sequence_id = 'SEQ_045_UNDERWATER'"
+    }
+  ],
+  "verification": {
+    "checked": 6,
+    "confirmed": 6,
+    "contradicted": 0
+  }
 }

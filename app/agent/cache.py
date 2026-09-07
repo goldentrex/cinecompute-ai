@@ -43,8 +43,9 @@ def load(question: str):
         return None
 
 
-def save(question: str, answer: str, tool_calls, model: str) -> None:
-    """Record a run. tool_calls is a list of (name, args, result_str) tuples."""
+def save(question: str, answer: str, tool_calls, model: str,
+         verdicts=None, verification=None) -> None:
+    """Record a run, with the verification that was run against it."""
     try:
         os.makedirs(CACHE_DIR, exist_ok=True)
         payload = {
@@ -55,6 +56,8 @@ def save(question: str, answer: str, tool_calls, model: str) -> None:
             "tool_calls": [
                 {"name": n, "args": a, "result": r} for n, a, r in tool_calls
             ],
+            "verdicts": verdicts or [],
+            "verification": verification or {},
         }
         with open(_path(question), "w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2, default=str)

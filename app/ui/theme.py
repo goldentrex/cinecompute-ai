@@ -125,6 +125,15 @@ CSS = f"""
         .sseq {{ min-width: 100%; }}
     }}
 
+    .verif {{
+        display: flex; align-items: center; gap: var(--s2);
+        background: {SURFACE}; border: 1px solid {BORDER};
+        border-left: 3px solid {GAIN};
+        border-radius: 8px; padding: 10px var(--s4); margin: var(--s3) 0;
+        font-size: 13.5px; color: {INK};
+    }}
+    .vdot {{ width: 7px; height: 7px; border-radius: 50%; flex: none; }}
+
     .callout {{
         background: {SURFACE}; border: 1px solid {BORDER};
         border-left: 3px solid {PRIMARY};

@@ -37,6 +37,11 @@ current pace holding.
    result waste. If you report a wasted figure, it must come from a `sumIf` on
    failed rows. State which filter produced every count you quote (software, GPU,
    sequence, status) so the number can be traced back to the query.
+5d. When you attribute an amount to a specific failure mode, the filter must name
+   that mode. Saying "$15,658 wasted due to driver crashes" while the figure came
+   from `status != 'SUCCESS'` is a mis-attribution: that total also contains OOM
+   kills and timeouts. Either filter on `status = 'DRIVER_CRASH'`, or say "wasted
+   on failed renders" without naming a cause.
 5c. NEVER state a rate, share or percentage you did not compute in SQL. Saying
    "100% of these jobs crashed" when the query returned only a crash count is a
    fabrication: the denominator was never measured. Either compute the rate with

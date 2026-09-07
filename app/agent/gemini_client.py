@@ -6,7 +6,7 @@ from google.genai import types
 from app.config import settings
 from app.agent.mcp_client import ClickHouseMCP, run_async
 from app.agent.prompts import SYSTEM_INSTRUCTION
-from app.agent import cache, model_state
+from app.agent import cache, model_state, verifier
 
 # The tool list is no longer written here: it is discovered from the ClickHouse
 # MCP server at `tools/list`, so the agent can only call what the server offers.
@@ -187,13 +187,16 @@ class CineComputeAgent:
 
         raise last_exc
 
-    def process_message(self, user_message: str, tool_callback=None, no_cache=False):
+    def process_message(self, user_message: str, tool_callback=None,
+                        no_cache=False, verify=False):
         """
         tool_callback is a function(tool_name, tool_args, tool_result) used to update UI.
         Never raises: transport/quota failures are returned as readable text so the UI stays alive.
         """
         self.last_error = None
         self.replayed = False
+        self.verdicts = []
+        self.verification = {"checked": 0, "confirmed": 0, "contradicted": 0}
 
         cache_mode = cache.mode()
         if cache_mode == "replay" and not no_cache:
@@ -210,6 +213,9 @@ class CineComputeAgent:
                             time.sleep(delay)
                 self.replayed = True
                 self.model_name = recorded.get("model", self.model_name)
+                self.verdicts = recorded.get("verdicts", [])
+                self.verification = recorded.get("verification", {}) or {
+                    "checked": 0, "confirmed": 0, "contradicted": 0}
                 return recorded["answer"]
 
         if self.client is None:
@@ -229,10 +235,11 @@ class CineComputeAgent:
                 tool_callback(name, args, result_str)
 
         try:
-            answer = self._process_message(user_message, wrapped_callback)
+            answer = self._process_message(user_message, wrapped_callback, verify)
             if (cache_mode in ("record", "replay") and not no_cache
                     and not answer.startswith("**Agent unavailable")):
-                cache.save(user_message, answer, recorded_calls, self.model_name)
+                cache.save(user_message, answer, recorded_calls, self.model_name,
+                           self.verdicts, self.verification)
             return answer
         except Exception as e:
             self.last_error = f"{type(e).__name__}: {e}"
@@ -241,13 +248,22 @@ class CineComputeAgent:
                 f"`{type(e).__name__}` while calling the Gemini API:\n\n```\n{str(e)[:600]}\n```"
             )
 
-    def _process_message(self, user_message: str, tool_callback=None):
+    def _process_message(self, user_message: str, tool_callback=None, verify=False):
         """Open an MCP session for the turn and run the loop inside it."""
-        return run_async(self._turn(user_message, tool_callback))
+        return run_async(self._turn(user_message, tool_callback, verify))
 
-    async def _turn(self, user_message: str, tool_callback=None):
+    async def _turn(self, user_message: str, tool_callback=None, verify=False):
         async with ClickHouseMCP() as mcp:
-            return await self._loop(mcp, user_message, tool_callback)
+            answer = await self._loop(mcp, user_message, tool_callback)
+            if verify and self.client is not None and answer.startswith("###"):
+                # same MCP session: the checks run against the same database the
+                # analysis just read, with no second connection to go wrong
+                self.verdicts, self.verification = await verifier.verify(
+                    answer, mcp,
+                    lambda **kw: self._generate(kw["contents"], kw["config"]),
+                    settings.clickhouse_database, user_message,
+                )
+            return answer
 
     async def _loop(self, mcp, user_message: str, tool_callback=None):
         contents = self.history.copy()
