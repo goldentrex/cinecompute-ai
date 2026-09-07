@@ -1,0 +1,19 @@
+# Dark studio theme applied on first paint, so a hosted demo never flashes white.
+[theme]
+base = "dark"
+primaryColor = "#00ffcc"
+backgroundColor = "#0b0e14"
+secondaryBackgroundColor = "#151a23"
+textColor = "#e8ecf4"
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = false

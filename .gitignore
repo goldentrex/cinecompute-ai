@@ -1,0 +1,15 @@
+*.pyc
+__pycache__/
+.env
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+.agent_cache/
+
+.streamlit/secrets.toml
+.env.backup*
+.DS_Store
+paper/
