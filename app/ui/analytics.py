@@ -118,6 +118,42 @@ def load_dashboard():
             ORDER BY day
         """)
 
+        # Cinema runs on delivery dates, not only on budgets. The deadline column
+        # exists in production_budgets and nothing used it until now.
+        schedule = timer.df(client, f"""
+            SELECT
+                b.sequence_id                                              AS sequence_id,
+                b.deadline                                                 AS deadline,
+                dateDiff('day', max(toDate(e.event_time)), b.deadline)     AS days_to_deadline,
+                round(sum(e.cost_usd) / nullIf(dateDiff('day',
+                    min(toDate(e.event_time)), max(toDate(e.event_time))), 0), 2) AS burn_per_day,
+                round(b.allocated_budget_usd - sum(e.cost_usd), 2)         AS budget_left,
+                round(sum(e.cost_usd), 2)                                  AS spend_usd,
+                round(b.allocated_budget_usd, 2)                           AS budget_usd
+            FROM {DB}.vfx_render_events e
+            INNER JOIN {DB}.production_budgets b ON e.sequence_id = b.sequence_id
+            GROUP BY b.sequence_id, b.deadline, b.allocated_budget_usd
+            ORDER BY b.deadline
+        """)
+
+        # derived in pandas so the arithmetic is inspectable, not buried in SQL
+        schedule["days_of_budget_left"] = (
+            schedule["budget_left"] / schedule["burn_per_day"].replace(0, float("nan"))
+        ).round(1)
+        schedule["cost_to_deadline"] = (
+            schedule["burn_per_day"] * schedule["days_to_deadline"]
+        ).round(2)
+        schedule["shortfall"] = (schedule["cost_to_deadline"] - schedule["budget_left"]).round(2)
+
+        def _verdict(r):
+            if r["budget_left"] < 0:
+                return "over"          # budget already spent
+            if r["days_of_budget_left"] < r["days_to_deadline"]:
+                return "at_risk"       # money runs out before the delivery date
+            return "ok"
+
+        schedule["verdict"] = schedule.apply(_verdict, axis=1)
+
         kpis = {
             "total_spend": kpi[0] or 0,
             "failure_rate": kpi[1] or 0,
@@ -132,7 +168,8 @@ def load_dashboard():
             "crash_waste": recoverable[1] or 0,
             "recoverable": (recoverable[0] or 0) + (recoverable[1] or 0),
         }
-        frames = {"budget": budget, "waste": waste, "hotspots": hotspots, "burn": burn}
+        frames = {"budget": budget, "waste": waste, "hotspots": hotspots,
+                  "burn": burn, "schedule": schedule}
         timing = {
             "total_ms": round(timer.total_ms, 1),
             "roundtrip_ms": round(timer.roundtrip_ms, 1),

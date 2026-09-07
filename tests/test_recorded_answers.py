@@ -101,3 +101,29 @@ def test_every_preset_button_has_a_recording():
 
     missing = [q for q in questions if cache.load(q) is None]
     assert not missing, f"presets with no recorded run: {[q[:60] for q in missing]}"
+
+
+def test_schedule_risk_matches_an_independent_query():
+    """The burn rate and days-of-budget-left shown on screen must be reproducible."""
+    from app.database.clickhouse_client import get_client
+    from app.ui.analytics import load_dashboard
+
+    _, frames, _, err = load_dashboard()
+    assert not err, err
+    shown = frames["schedule"].set_index("sequence_id")
+
+    client = get_client()
+    db = settings.clickhouse_database
+    rows = client.query(f"""
+        SELECT b.sequence_id,
+               round(sum(e.cost_usd) / nullIf(dateDiff('day',
+                   min(toDate(e.event_time)), max(toDate(e.event_time))), 0), 2),
+               round(b.allocated_budget_usd - sum(e.cost_usd), 2)
+        FROM {db}.vfx_render_events e
+        INNER JOIN {db}.production_budgets b ON e.sequence_id = b.sequence_id
+        GROUP BY b.sequence_id, b.allocated_budget_usd
+    """).result_rows
+
+    for seq, burn, left in rows:
+        assert abs(shown.loc[seq, "burn_per_day"] - burn) < 0.01, f"burn drifted for {seq}"
+        assert abs(shown.loc[seq, "budget_left"] - left) < 0.01, f"budget left drifted for {seq}"

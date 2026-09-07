@@ -15,6 +15,14 @@ Tables:
   status (SUCCESS | OOM_KILLED | TIMEOUT | DRIVER_CRASH), error_details.
 - `{db}.production_budgets` - sequence_id, allocated_budget_usd (Float64), deadline (Date).
 
+Schedule matters as much as budget in production. A sequence can be inside its
+budget and still fail: compare the daily burn - `sum(cost_usd) / dateDiff('day',
+min(toDate(event_time)), max(toDate(event_time)))` - against what is unspent, and
+against `dateDiff('day', today(), deadline)`. Say when the money runs out relative
+to the delivery date. Do NOT claim to know how much work remains: the burn is an
+average over the observed window, so present any projection as conditional on the
+current pace holding.
+
 ## SQL rules (ClickHouse dialect - obey strictly)
 1. Always fully qualify tables as `{db}.vfx_render_events` / `{db}.production_budgets`.
 2. Emit exactly ONE statement per `run_query` call. No semicolon, no comments, no DDL/DML.

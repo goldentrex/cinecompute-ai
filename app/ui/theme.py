@@ -109,6 +109,22 @@ CSS = f"""
     .card.lead .metric-v {{ font-size: {SCALE["2xl"]}px; letter-spacing: -1.8px; }}
     .metric-d {{ font-size: 12.5px; color: {MUTED}; margin-top: 4px; }}
 
+    .srow {{
+        display: flex; align-items: center; gap: var(--s3);
+        padding: 9px 0; border-bottom: 1px solid {BORDER};
+        font-size: 14px;
+    }}
+    .srow:last-of-type {{ border-bottom: none; }}
+    .sseq {{ font-weight: 600; min-width: 210px; }}
+    .sbar {{ width: 8px; height: 8px; border-radius: 50%; flex: none; }}
+    .sfact {{ flex: 1; }}
+    .sdead {{ color: {MUTED}; font-variant-numeric: tabular-nums; }}
+    .snote {{ font-size: 12.5px; color: {MUTED}; margin-top: var(--s3); line-height: 1.55; }}
+    @media (max-width: 640px) {{
+        .srow {{ flex-wrap: wrap; }}
+        .sseq {{ min-width: 100%; }}
+    }}
+
     .callout {{
         background: {SURFACE}; border: 1px solid {BORDER};
         border-left: 3px solid {PRIMARY};

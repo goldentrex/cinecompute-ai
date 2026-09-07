@@ -190,6 +190,33 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+sched = frames["schedule"]
+_worst = sched.sort_values("days_of_budget_left").iloc[0]
+_in_trouble = int((sched["verdict"] != "ok").sum())
+
+st.markdown('<div class="label">Schedule risk</div>', unsafe_allow_html=True)
+_rows = []
+for _, r in sched.iterrows():
+    colour = {"over": theme.LOSS, "at_risk": theme.WARN, "ok": theme.GAIN}[r["verdict"]]
+    left = ("budget already spent" if r["budget_left"] < 0
+            else f'{r["days_of_budget_left"]:.0f} days of budget left')
+    _rows.append(
+        f'<div class="srow">'
+        f'<span class="sseq">{r["sequence_id"]}</span>'
+        f'<span class="sbar" style="background:{colour}"></span>'
+        f'<span class="sfact">{left}</span>'
+        f'<span class="sdead">{r["days_to_deadline"]} days to {r["deadline"]:%d %b}</span>'
+        f'</div>'
+    )
+st.markdown(
+    f'<div class="card">{"".join(_rows)}'
+    f'<div class="snote">Burn is the average over the observed window '
+    f'(${_worst["burn_per_day"]:,.0f}/day for {_worst["sequence_id"]}). '
+    f'Days of budget left compares that burn to what is unspent - it does not '
+    f'assume how much work remains.</div></div>',
+    unsafe_allow_html=True,
+)
+
 st.markdown('<div class="label">Ask the agent</div>', unsafe_allow_html=True)
 if getattr(st.session_state.agent, 'setup_error', None):
     st.warning(
