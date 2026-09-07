@@ -70,6 +70,8 @@ class CineComputeAgent:
         # Vertex AI when a Google Cloud project is configured (no per-model free
         # quota), otherwise the AI Studio endpoint with an API key.
         if settings.google_genai_use_vertexai and settings.google_cloud_project:
+            from app.agent.gcp_auth import ensure_credentials
+            ensure_credentials()
             self.client = genai.Client(
                 vertexai=True,
                 project=settings.google_cloud_project,

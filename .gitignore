@@ -17,3 +17,7 @@ htmlcov/
 paper/
 
 .venv314/
+
+# never commit a service account key
+*service-account*.json
+gcp-key*.json

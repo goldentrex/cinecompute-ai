@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     google_genai_use_vertexai: bool = False
     google_cloud_project: str = ""
     google_cloud_location: str = "us-central1"
+    # Streamlit Cloud has no filesystem to drop a key file on, so the service
+    # account JSON can be passed whole as a secret and is materialised at startup.
+    google_credentials_json: str = ""
     clickhouse_host: str = "localhost"
     clickhouse_port: int = 8123
     clickhouse_user: str = "default"
