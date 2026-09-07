@@ -48,12 +48,22 @@ graph TD
     D -->|SQL + latency + rows| E[Live MCP Query Inspector]
 ```
 
-## Features
-- **OOM Silent Kill Detection** — pinpoints the software/GPU/sequence combination burning VRAM.
-- **Financial Impact Analysis** — wasted compute dollars and budget overrun, computed in ClickHouse.
-- **Live MCP inspector** — every `tools/call` streams into the UI as it executes: the exact SQL, latency, and a preview of the rows returned.
-- **Read-only by construction** — the MCP server runs ClickHouse with `readonly=1`, and a client-side allowlist rejects non-read statements.
-- **Model failover** — quota (429), retirement (404) and capacity (503) errors transparently move the session to the next Gemini flash model.
+## What it does
+
+- **Writes its own SQL.** No pre-written queries: it inspects the schema, queries,
+  reads the result, queries again. Every statement appears live with its latency,
+  and one button runs a question that is never cached.
+- **Checks its own arithmetic.** A second agent re-derives every figure from the
+  database. It never sees the value it is checking, and the comparison is
+  arithmetic - no model decides whether a number is right.
+- **Reads the calendar.** Two sequences have already spent their budget with 38 and
+  55 days left before delivery; the one that looks healthy on money has four days
+  of runway for 85 days of calendar.
+- **Sweeps unprompted, and exports the fix.** One click ranks every project x
+  sequence x software x GPU slice - 12 systemic incidents, $57,836 recoverable -
+  and writes them out as scheduler rules a render manager can apply.
+- **Read-only by construction.** The MCP server opens ClickHouse with `readonly=1`,
+  and a client-side allowlist rejects non-reads before they are sent.
 
 ## Data model
 
