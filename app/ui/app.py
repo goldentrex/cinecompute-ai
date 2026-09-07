@@ -221,10 +221,11 @@ st.markdown(
 )
 
 st.markdown(
-    f'<div class="callout">Two faults account for most of the waste: '
-    f'<b>${kpis["oom_waste"]:,.0f}</b> of Houdini Karma out-of-memory kills on '
-    f'SEQ_010_SPACE_BATTLE, and <b>${kpis["crash_waste"]:,.0f}</b> of L40S driver '
-    f'crashes on SEQ_045_UNDERWATER. Both are fixable in the pipeline today.</div>',
+    f'<div class="callout">Two faults account for it: '
+    f'<b>${kpis["oom_waste"]:,.0f}</b> of Houdini Karma jobs killed at the 80 GB VRAM '
+    f'ceiling on SEQ_010_SPACE_BATTLE, and <b>${kpis["crash_waste"]:,.0f}</b> of L40S '
+    f'driver crashes on SEQ_045_UNDERWATER. Both are scheduler settings, not artistry '
+    f'- they can be changed today.</div>',
     unsafe_allow_html=True,
 )
 
@@ -403,6 +404,12 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # Act on it: a sweep nobody asked for, and the fix it implies
 # --------------------------------------------------------------------------
 st.markdown('<div class="label">Act on it</div>', unsafe_allow_html=True)
+st.markdown(
+    '<p class="lead">The agent explains. These two do not ask it anything: they sweep '
+    'the farm in SQL and turn what they find into scheduler rules you can hand to '
+    'Deadline or Tractor.</p>',
+    unsafe_allow_html=True,
+)
 
 
 @st.cache_data(ttl=120, show_spinner=False)

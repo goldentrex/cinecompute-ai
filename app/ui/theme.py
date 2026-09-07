@@ -134,6 +134,11 @@ CSS = f"""
     }}
     .vdot {{ width: 7px; height: 7px; border-radius: 50%; flex: none; }}
 
+    .lead {{
+        font-size: 14px; color: {MUTED}; line-height: 1.6;
+        margin: -4px 0 var(--s3) 0; max-width: 720px;
+    }}
+
     .callout {{
         background: {SURFACE}; border: 1px solid {BORDER};
         border-left: 3px solid {PRIMARY};

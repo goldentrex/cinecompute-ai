@@ -1,8 +1,8 @@
 """Live pipeline diagram.
 
 Renders the agent loop as an SVG whose nodes light up while the turn is running:
-the question reaches Gemini, Gemini writes SQL through the MCP bridge, ClickHouse
-answers, and the loop either repeats or produces the analysis. The UI re-renders
+the question reaches Gemini, Gemini writes SQL that goes out as an MCP tools/call,
+ClickHouse answers, and the loop either repeats or produces the analysis. The UI re-renders
 this into a placeholder from the tool callback, so it animates as work happens.
 """
 
@@ -10,7 +10,7 @@ from app.ui import theme
 
 # phase -> (index of the active node, caption)
 PHASES = {
-    "idle":      (-1, "Waiting for a question"),
+    "idle":      (-1, "Every question travels this path - no pre-written SQL anywhere"),
     "thinking":  (1, "Gemini is deciding what to ask"),
     "querying":  (3, "ClickHouse is executing the query"),
     "answering": (4, "Composing the analysis"),
