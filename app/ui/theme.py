@@ -115,6 +115,15 @@ CSS = f"""
         height: 100%;
         transition: border-color .15s, box-shadow .15s;
     }}
+    /* Streamlit truncates button labels with an ellipsis; these are questions,
+       so let them wrap onto two lines instead of losing their ending. */
+    .stButton > button p,
+    .stButton > button div {{
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        line-height: 1.35;
+    }}
     .stButton > button:hover {{
         border-color: {INK};
         box-shadow: 0 2px 10px rgba(0,0,0,.06);
