@@ -10,16 +10,29 @@ DB = settings.clickhouse_database
 
 
 class QueryTimer:
-    """Collects server-side latency so the UI can show ClickHouse's speed."""
+    """Separates ClickHouse execution time from network round-trip.
+
+    A hosted app can sit an ocean away from the database, so wall-clock timing
+    mostly measures the link, not the engine. ClickHouse reports its own
+    `elapsed_ns` and `read_rows` per query - that is the honest number to show.
+    """
 
     def __init__(self):
-        self.total_ms = 0.0
+        self.total_ms = 0.0        # server-side execution
+        self.roundtrip_ms = 0.0    # including network
+        self.rows_scanned = 0
         self.count = 0
 
     def run(self, client, sql):
         start = time.time()
         res = client.query(sql)
-        self.total_ms += (time.time() - start) * 1000
+        self.roundtrip_ms += (time.time() - start) * 1000
+        summary = getattr(res, "summary", None) or {}
+        try:
+            self.total_ms += int(summary.get("elapsed_ns", 0)) / 1e6
+            self.rows_scanned += int(summary.get("read_rows", 0))
+        except (TypeError, ValueError):
+            pass
         self.count += 1
         return res
 
@@ -117,8 +130,14 @@ def load_dashboard():
             "recoverable": (recoverable[0] or 0) + (recoverable[1] or 0),
         }
         frames = {"budget": budget, "waste": waste, "hotspots": hotspots, "burn": burn}
-        timing = {"total_ms": round(timer.total_ms, 1), "queries": timer.count}
+        timing = {
+            "total_ms": round(timer.total_ms, 1),
+            "roundtrip_ms": round(timer.roundtrip_ms, 1),
+            "rows_scanned": timer.rows_scanned,
+            "queries": timer.count,
+        }
         return kpis, frames, timing, None
 
     except Exception as e:
-        return None, None, {"total_ms": 0, "queries": 0}, str(e)
+        return None, None, {"total_ms": 0, "roundtrip_ms": 0,
+                            "rows_scanned": 0, "queries": 0}, str(e)

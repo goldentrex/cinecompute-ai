@@ -72,7 +72,9 @@ def render_log(log, index, expanded=False):
     latency = res.get("latency_ms")
     header = f"🔧 {log['tool']}"
     if latency is not None:
-        header += f"  ·  {latency} ms  ·  {res.get('row_count', 0)} rows"
+        header += f"  ·  {latency} ms in ClickHouse"
+        if res.get("rows_scanned"):
+            header += f"  ·  {res['rows_scanned']:,} rows scanned"
 
     with st.expander(header, expanded=expanded):
         if res.get("raw_query"):
@@ -118,10 +120,12 @@ with st.sidebar:
     if kpis:
         st.caption(f"{kpis['events']:,} telemetry events indexed")
         st.markdown(
-            f'<span class="speed-badge">⚡ dashboard: {timing["queries"]} queries '
-            f'in {timing["total_ms"]} ms</span>',
+            f'<span class="speed-badge">⚡ {timing["queries"]} queries · '
+            f'{timing["total_ms"]} ms in ClickHouse</span>',
             unsafe_allow_html=True,
         )
+        st.caption(f"{timing['roundtrip_ms']:.0f} ms including the network hop "
+                   f"to {settings.clickhouse_host.split('.')[1]}")
 
     st.divider()
     st.markdown("**Reasoning plane**")
@@ -206,7 +210,8 @@ st.markdown(
     'Both are fixable in the pipeline today — the agent below proves it from the telemetry.'
     '</div>'
     f'<div class="hero-badge">⚡ {timing["queries"]} ClickHouse queries · '
-    f'{timing["total_ms"]} ms · {kpis["events"]:,} rows scanned</div>'
+    f'{timing["total_ms"]} ms of engine time · '
+    f'{timing["rows_scanned"]:,} rows scanned</div>'
     '</div>',
     unsafe_allow_html=True,
 )

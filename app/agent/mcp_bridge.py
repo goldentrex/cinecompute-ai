@@ -75,7 +75,16 @@ def run_query(sql_query: str) -> str:
         client = get_client(readonly=True)
         start_time = time.time()
         result = client.query(sql)
-        latency_ms = round((time.time() - start_time) * 1000, 2)
+        roundtrip_ms = round((time.time() - start_time) * 1000, 2)
+
+        # ClickHouse reports its own execution time; the wall clock also carries
+        # the network hop, which can dwarf it when the app is hosted far away.
+        summary = getattr(result, "summary", None) or {}
+        try:
+            latency_ms = round(int(summary.get("elapsed_ns", 0)) / 1e6, 2) or roundtrip_ms
+            rows_scanned = int(summary.get("read_rows", 0))
+        except (TypeError, ValueError):
+            latency_ms, rows_scanned = roundtrip_ms, 0
 
         rows = result.result_rows
         column_names = result.column_names
@@ -83,6 +92,8 @@ def run_query(sql_query: str) -> str:
 
         return json.dumps({
             "latency_ms": latency_ms,
+            "roundtrip_ms": roundtrip_ms,
+            "rows_scanned": rows_scanned,
             "row_count": len(rows),
             "columns": list(column_names),
             "data": formatted_rows,
