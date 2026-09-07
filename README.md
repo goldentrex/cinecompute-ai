@@ -1,13 +1,24 @@
 # 🎬 CineCompute AI
-**Google Agentic Cinema Track Submission — ClickHouse Partner Track**
 
-CineCompute AI is an autonomous VFX render-farm FinOps agent. **Gemini** (via `google-genai`)
-reaches **ClickHouse Cloud** exclusively through the **official ClickHouse MCP server**
-(`mcp-clickhouse`), spoken over MCP's stdio transport. It analyses 250,000 render telemetry
-events, diagnoses OOM kills and driver crashes, correlates them with production budgets, and
-prescribes actionable pipeline fixes.
+**A render farm loses money quietly.** A frame dies at 78 GB of VRAM, the scheduler retries
+it, and the cost is gone before anyone reads a log. Across 250,000 events, nobody has time
+to add it up.
 
-**Google Cloud Agentic Cinema hackathon — ClickHouse partner track.**
+CineCompute AI answers one question: **where is the render budget going, and what should
+the pipeline TD change today?**
+
+> **$65,999** of the **$97,885** wasted on renders that produced no frame is recoverable,
+> and it traces to just two systemic faults: Houdini Karma hitting the 80 GB VRAM ceiling
+> on `SEQ_010_SPACE_BATTLE` ($10,079), and an L40S pool crashing on `SEQ_045_UNDERWATER`
+> ($55,919).
+
+Ask it anything and it writes its own SQL — no pre-written queries. It inspects the schema,
+queries, reads the result, queries again, and answers: why it happens, what it costs, what
+to do. Every statement it writes is shown live, with its latency.
+
+**Live demo → https://cinecompute-ai.streamlit.app**
+
+*Google Cloud Agentic Cinema hackathon — ClickHouse partner track.*
 
 ## How the agent reaches the data
 
@@ -164,6 +175,18 @@ Free-tier quotas are **per model, per day**, so `FALLBACK_MODELS` in
 `app/agent/gemini_client.py` chains seven models - roughly seven separate daily
 allowances. Quota (429) and retirement (404) move the session on permanently;
 a capacity blip (503) is retried once and does not permanently downgrade the model.
+
+## Tests
+
+```bash
+pytest -q          # 16 tests, no API cost
+```
+
+They check the properties that matter rather than the plumbing: that writes are refused
+before a round-trip, that engine metrics never reach the model, that the prompt still
+carries every rule a past mistake made necessary, and that **every figure in the recorded
+demo answers still matches the database**. The data-backed tests skip themselves when no
+ClickHouse credentials are present, so the suite runs anywhere.
 
 ## Pre-demo checklist
 ```bash

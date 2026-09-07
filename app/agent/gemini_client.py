@@ -184,7 +184,7 @@ class CineComputeAgent:
 
         raise last_exc
 
-    def process_message(self, user_message: str, tool_callback=None):
+    def process_message(self, user_message: str, tool_callback=None, no_cache=False):
         """
         tool_callback is a function(tool_name, tool_args, tool_result) used to update UI.
         Never raises: transport/quota failures are returned as readable text so the UI stays alive.
@@ -193,7 +193,7 @@ class CineComputeAgent:
         self.replayed = False
 
         cache_mode = cache.mode()
-        if cache_mode == "replay":
+        if cache_mode == "replay" and not no_cache:
             recorded = cache.load(user_message)
             if recorded:
                 # Replay the recorded tool calls through the same callback so the
@@ -227,7 +227,8 @@ class CineComputeAgent:
 
         try:
             answer = self._process_message(user_message, wrapped_callback)
-            if cache_mode in ("record", "replay") and not answer.startswith("**Agent unavailable"):
+            if (cache_mode in ("record", "replay") and not no_cache
+                    and not answer.startswith("**Agent unavailable")):
                 cache.save(user_message, answer, recorded_calls, self.model_name)
             return answer
         except Exception as e:

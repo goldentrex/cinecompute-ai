@@ -215,6 +215,16 @@ for col, (label, question) in zip(st.columns(3), PRESETS):
     if col.button(label, width="stretch"):
         preset_clicked = question
 
+# A recorded answer cannot prove the agent writes its own SQL. This one is never
+# cached: it always runs live, so the pipeline and the queries are the real thing.
+LIVE_PROBE = (
+    "Pick the single worst shot_id in the whole farm by wasted spend, say which "
+    "software and GPU it ran on, and what you would change."
+)
+if st.button("▶  Watch it work live  ·  runs a fresh, unrecorded question",
+             width="stretch", disabled=st.session_state.agent.client is None):
+    preset_clicked = LIVE_PROBE
+
 
 # Placeholders the tool callback paints into while the turn is still running,
 # so the pipeline animates with the work instead of after it.
@@ -257,7 +267,9 @@ def mcp_callback(name, args, result_str):
 
 prompt = st.chat_input("Or ask your own question…") or preset_clicked
 
-will_replay = bool(prompt) and cache.mode() == "replay" and cache.load(prompt) is not None
+is_live_probe = prompt == LIVE_PROBE
+will_replay = (bool(prompt) and not is_live_probe
+               and cache.mode() == "replay" and cache.load(prompt) is not None)
 if prompt and PUBLIC_DEMO and not will_replay \
         and st.session_state.live_calls >= LIVE_QUESTION_BUDGET:
     st.warning(
@@ -272,7 +284,8 @@ if prompt:
     st.session_state.messages = [{"role": "user", "content": prompt}]
     turn_start = len(st.session_state.mcp_logs)
     _paint("thinking", "Sending the question to Gemini")
-    answer = st.session_state.agent.process_message(prompt, tool_callback=mcp_callback)
+    answer = st.session_state.agent.process_message(
+        prompt, tool_callback=mcp_callback, no_cache=is_live_probe)
     _paint("answering", "Writing the analysis")
     st.session_state.messages.append({
         "role": "assistant",
@@ -371,6 +384,7 @@ with st.expander("Show the numbers behind this"):
     st.dataframe(h, width="stretch", hide_index=True)
 
 st.markdown(
+    '<div class="foot">Synthetic render-farm telemetry - 250,000 events over 30 days, generated deterministically by <code>scripts/seed_vfx_data.py</code>, VRAM peaks bounded by each card&rsquo;s real capacity.</div>'
     f'<div class="foot">Gemini <code>{st.session_state.agent.model_name}</code> '
     f'({getattr(st.session_state.agent, "backend", "ai-studio")}) writing its own '
     f'read-only SQL, reaching '
