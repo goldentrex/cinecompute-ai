@@ -32,7 +32,9 @@ st.markdown(theme.CSS, unsafe_allow_html=True)
 for key, default in (("messages", []), ("mcp_logs", []), ("live_calls", 0)):
     if key not in st.session_state:
         st.session_state[key] = default
-if "agent" not in st.session_state:
+# A redeploy leaves already-open browser sessions holding an agent built by the
+# previous version of the code. Rebuild it when it predates the current class.
+if "agent" not in st.session_state or not hasattr(st.session_state.agent, "backend"):
     st.session_state.agent = CineComputeAgent()
 
 PUBLIC_DEMO = os.environ.get("PUBLIC_DEMO", "").strip().lower() in ("1", "true", "yes")
@@ -364,7 +366,8 @@ with st.expander("Show the numbers behind this"):
 
 st.markdown(
     f'<div class="foot">Gemini <code>{st.session_state.agent.model_name}</code> '
-    f'({st.session_state.agent.backend}) writing its own read-only SQL, reaching '
+    f'({getattr(st.session_state.agent, "backend", "ai-studio")}) writing its own '
+    f'read-only SQL, reaching '
     f'ClickHouse only through the official MCP server · dashboard computed in '
     f'{timing["total_ms"]:.0f} ms of engine time over {timing["rows_scanned"]:,} rows'
     + (f' · {max(0, LIVE_QUESTION_BUDGET - st.session_state.live_calls)} live questions left'
