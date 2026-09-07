@@ -342,7 +342,7 @@ with st.expander("Show the numbers behind this"):
     theme.annotate(fig, bd["day"].iloc[len(bd) // 2], bd["productive_usd"].iloc[len(bd) // 2],
                    "Productive", theme.MUTED, dy=-14)
     st.plotly_chart(theme.plotly_layout(fig, 260, "Daily spend"),
-                    use_container_width=True, config={"displayModeBar": False})
+                    width="stretch", config={"displayModeBar": False})
 
     b = frames["budget"]
     fig = go.Figure()
@@ -358,7 +358,7 @@ with st.expander("Show the numbers behind this"):
     fig.update_layout(barmode="group", bargap=0.45, bargroupgap=0.08)
     fig.update_traces(marker_cornerradius=5, selector=dict(type="bar"))
     st.plotly_chart(theme.plotly_layout(fig, 280, "Budget vs actual spend"),
-                    use_container_width=True, config={"displayModeBar": False})
+                    width="stretch", config={"displayModeBar": False})
 
     h = frames["hotspots"].copy()
     h.columns = ["Project · Sequence · Software", "Failure %", "Wasted $", "Jobs"]
