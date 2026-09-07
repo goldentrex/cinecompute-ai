@@ -234,8 +234,16 @@ CSS = f"""
         .topbar {{ flex-direction: column; align-items: flex-start; gap: var(--s2); }}
         .step {{ font-size: 12px; }}
         /* the pipeline is wider than a phone: let it scroll rather than shrink
-           the labels into illegibility */
-        .wfbox {{ overflow-x: auto; }}
+           the labels into illegibility, and fade the edge so it reads as scrollable */
+        .wfbox {{
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            background:
+                linear-gradient(90deg, {SURFACE} 30%, rgba(255,255,255,0)) left / 24px 100% no-repeat,
+                linear-gradient(270deg, {SURFACE} 30%, rgba(255,255,255,0)) right / 24px 100% no-repeat,
+                {SURFACE};
+            background-attachment: local, local, scroll;
+        }}
         .wfbox svg {{ min-width: 720px; }}
     }}
 </style>
