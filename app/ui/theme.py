@@ -37,10 +37,11 @@ MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
 SCALE = {"xs": 11.5, "sm": 12.5, "base": 14.5, "md": 15, "lg": 20, "xl": 28, "2xl": 40}
 
 CSS = f"""
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 <style>
+    /* Streamlit strips <link> tags from markdown HTML, so the webfont has to be
+       pulled in from inside the stylesheet. @import must stay the first rule. */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
+
     :root {{
         --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
         --s5: 24px; --s6: 32px; --s7: 48px;
@@ -49,8 +50,9 @@ CSS = f"""
     [data-testid="stHeader"] {{ background: transparent; }}
     .block-container {{ max-width: 1080px; padding-top: var(--s5); padding-bottom: 128px; }}
 
-    html, body, [data-testid="stAppViewContainer"] * {{
-        font-family: {FONT};
+    html, body, [data-testid="stAppViewContainer"] *,
+    [data-testid="stSidebar"] * {{
+        font-family: {FONT} !important;
         color: {INK};
         font-size: {SCALE["md"]}px;
         -webkit-font-smoothing: antialiased;
