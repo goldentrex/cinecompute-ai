@@ -150,10 +150,21 @@ It verifies the connection, that both tables are populated, that the MCP write-g
 ## Troubleshooting
 
 **`SSLZeroReturnError: TLS/SSL connection has been closed (EOF)` against ClickHouse Cloud**
-The server drops the TLS handshake before sending a certificate. This is not a client bug — it means the connection is being refused at the edge. Check, in order:
-1. **IP access list** — ClickHouse Cloud → service → Settings → IP access list must contain your current public IP (`curl ifconfig.me`). A changed IP is the most common cause.
-2. **Service state** — an idle service resumes on connect, but a *stopped* one refuses.
-3. **Host and port** — must be the HTTPS endpoint on `8443` with `CLICKHOUSE_SECURE=True`.
+The server drops the handshake before sending a certificate, so TLS fails identically
+from every network and on every port. Check these in order — the first one cost us hours:
+
+1. **Typos in the hostname.** `*.clickhouse.cloud` is a wildcard DNS record, so a
+   misspelled host still resolves and still accepts a TCP connection; the Google load
+   balancer then closes it because no backend matches. Watch for `l` vs `1` and `0` vs
+   `O` in the service ID. Copy the endpoint from the console's **Connect** dialog rather
+   than retyping it. This produces exactly the same symptom as a firewall block.
+2. **Service idle or stopped.** An idle ClickHouse Cloud service refuses connections
+   rather than waking on connect. Wake it from the console.
+3. **IP access list.** Settings → IP access list must contain your current public IP
+   (`curl ifconfig.me`), or be set to Anywhere for a host with dynamic egress.
+
+Note that `verify=False` does *not* help with any of these — the server never sends a
+certificate, so there is nothing to verify. Leave `CLICKHOUSE_VERIFY=True`.
 
 **`429 RESOURCE_EXHAUSTED` from Gemini**
 Free-tier quotas are per-model and per-day. The agent fails over automatically, but enable billing on the API key before a live demo.
