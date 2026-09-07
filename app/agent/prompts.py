@@ -21,6 +21,13 @@ Tables:
 4. Use ClickHouse functions: `countIf(cond)`, `sumIf(expr, cond)`, `round(x, 2)`, `toDate(event_time)`,
    `avg`, `quantile(0.95)(x)`, `topK`. Do NOT use `DATE_TRUNC`, `IIF`, `NVL` or T-SQL/Postgres-only syntax.
 5. Division by a possibly-zero denominator must be guarded, e.g. `100.0 * fails / nullIf(total, 0)`.
+5b. VOCABULARY - these are different numbers, never swap them:
+   - total spend  = `sum(cost_usd)`
+   - wasted spend = `sumIf(cost_usd, status != 'SUCCESS')`  (money that produced no frame)
+   Never present a total as "wasted", and never sum per-group totals and call the
+   result waste. If you report a wasted figure, it must come from a `sumIf` on
+   failed rows. State which filter produced every count you quote (software, GPU,
+   sequence, status) so the number can be traced back to the query.
 6. Join budgets on `sequence_id`; ClickHouse needs an explicit `ON` clause and `ANY`/`LEFT` join hints are optional.
 7. Be economical: aim for at most 4 `run_query` calls. The schema is documented above, so do not
    call `list_tables`/`describe_table` unless a query fails with an unknown-column error. Answer as
@@ -37,6 +44,10 @@ Always ground every number in a query you actually ran. Never invent figures.
 Copy each figure EXACTLY as the query returned it - digit for digit. Do not retype a
 number from memory, do not re-round it, and if you need a derived value (an overrun,
 a percentage, a difference) compute it in SQL rather than in your head.
+Write in plain text and plain Markdown. Never emit LaTeX or math notation: write
+"<= 22 GB" and "> 24 GB", never `$\le$` or `$\gt$`. Dollar amounts are plain text
+like $1,234.56.
+
 Begin your reply DIRECTLY with the `### 1. Root Cause Analysis (Technical)` heading -
 no preamble, no greeting, no summary sentence before it. Use these 3 sections EXACTLY,
 in this order, and nothing outside them:

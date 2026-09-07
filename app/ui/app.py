@@ -57,6 +57,61 @@ def money_safe(text: str) -> str:
     return "".join(p if p.startswith("`") else p.replace("$", r"\$") for p in parts)
 
 
+SECTION_STYLE = [
+    ("cause", "🔍", "Root Cause Analysis"),
+    ("money", "💸", "Financial & Schedule Impact"),
+    ("fix", "🛠️", "Prescriptive Action Plan"),
+]
+
+
+def render_answer(text: str):
+    """Render the agent's answer as three labelled blocks instead of one wall of text.
+
+    Falls back to plain markdown if the answer does not follow the 3-section shape.
+    """
+    parts = re.split(r"^###\s*\d\.\s*(.+?)\s*$", text, flags=re.MULTILINE)
+    if len(parts) < 3:
+        st.markdown(money_safe(text))
+        return
+
+    preamble = parts[0].strip()
+    if preamble:
+        st.markdown(money_safe(preamble))
+
+    bodies = [(parts[i], parts[i + 1]) for i in range(1, len(parts) - 1, 2)]
+    for idx, (heading, body) in enumerate(bodies):
+        cls, icon, _ = SECTION_STYLE[idx] if idx < len(SECTION_STYLE) else ("cause", "•", heading)
+        # A real bordered container keeps the heading and its prose together, so
+        # each of the three arguments reads as one unit on screen.
+        with st.container(border=True):
+            st.markdown(
+                f'<div class="sec-head {cls}">{icon}&nbsp; {idx + 1}. {heading}</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(money_safe(body.strip()))
+
+
+def render_steps(logs):
+    """One chip per tool call: what the agent did, and how long ClickHouse took."""
+    if not logs:
+        return
+    chips = []
+    for i, log in enumerate(logs, 1):
+        res = log["result"]
+        name = log["tool"]
+        if name == "run_query":
+            n = res.get("row_count", 0)
+            label = f"query {n} row" + ("" if n == 1 else "s")
+        elif name == "describe_table":
+            label = f"schema {log['args'].get('table_name', '')}"
+        else:
+            label = name
+        ms = res.get("latency_ms")
+        timing = f' · <span class="t">{ms} ms</span>' if ms is not None else ""
+        chips.append(f'<span class="step"><b>{i}. {label}</b>{timing}</span>')
+    st.markdown(f'<div class="steps">{"".join(chips)}</div>', unsafe_allow_html=True)
+
+
 def kpi_card(label, value, sub="", color=theme.ACCENT, small=False):
     return (
         f'<div class="kpi" style="border-left-color:{color}">'
@@ -308,9 +363,14 @@ with chat_col:
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"], avatar="🎬" if msg["role"] == "assistant" else "👤"):
-            st.markdown(money_safe(msg["content"]))
-            if msg.get("replayed"):
-                st.caption("↺ replayed from cache — no Gemini quota used")
+            if msg["role"] == "assistant":
+                if msg.get("steps"):
+                    render_steps(msg["steps"])
+                render_answer(msg["content"])
+                if msg.get("replayed"):
+                    st.caption("↺ replayed from cache — no Gemini quota used")
+            else:
+                st.markdown(money_safe(msg["content"]))
 
     prompt = st.chat_input("Ask about failures, cost, budgets, GPUs…") or preset_clicked
 
@@ -332,16 +392,18 @@ with chat_col:
         with st.chat_message("user", avatar="👤"):
             st.markdown(money_safe(prompt))
 
+        turn_start = len(st.session_state.mcp_logs)
         with st.chat_message("assistant", avatar="🎬"):
             with st.spinner("Querying 250k telemetry events…"):
                 response_text = st.session_state.agent.process_message(
                     prompt, tool_callback=mcp_callback
                 )
-            st.markdown(money_safe(response_text))
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": response_text,
                 "replayed": getattr(st.session_state.agent, "replayed", False),
+                # what the agent did on THIS turn, shown as a step trail
+                "steps": st.session_state.mcp_logs[turn_start:],
             })
             st.rerun()
 

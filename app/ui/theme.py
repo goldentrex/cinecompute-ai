@@ -104,6 +104,43 @@ CSS = f"""
     .hero-sub {{ font-size: 15.5px; color: {INK}; margin-top: 6px; line-height: 1.6; max-width: 1100px; }}
     .hero-badge {{ font-size: 13px; color: {MUTED}; margin-top: 10px; letter-spacing: 0.3px; }}
 
+    /* The agent's answer is three distinct arguments; render them as three
+       distinct blocks so a viewer can follow it on a video, not one wall of text. */
+    .sec-head {{
+        font-size: 13.5px;
+        font-weight: 700;
+        letter-spacing: 1.3px;
+        text-transform: uppercase;
+        margin: 2px 0 8px 0;
+        padding-bottom: 8px;
+        border-bottom: 1px solid {BORDER};
+    }}
+    .sec-head.cause {{ color: {INFO}; }}
+    .sec-head.money {{ color: {DANGER}; }}
+    .sec-head.fix   {{ color: {ACCENT}; }}
+
+    /* Streamlit's bordered container, themed to match the panels */
+    [data-testid="stChatMessage"] [data-testid="stVerticalBlockBorderWrapper"] {{
+        background: #12161e;
+        border-color: {BORDER} !important;
+        border-radius: 10px;
+    }}
+
+    /* Agent step trail */
+    .steps {{ margin: 6px 0 12px 0; line-height: 2.1; }}
+    .step {{
+        display: inline-block;
+        background: #12161e;
+        border: 1px solid {BORDER};
+        border-radius: 999px;
+        padding: 5px 12px;
+        margin-right: 7px;
+        font-size: 12.5px;
+        color: {MUTED};
+    }}
+    .step b {{ color: {INK}; font-weight: 600; }}
+    .step .t {{ color: {ACCENT}; }}
+
     .speed-badge {{
         display: inline-block;
         background: rgba(0,255,204,0.10);

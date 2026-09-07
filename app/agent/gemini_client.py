@@ -52,6 +52,10 @@ TOOL_DECLARATIONS = [
     ),
 ]
 
+# Keys the MCP bridge returns for the UI that must never reach the model, to
+# stop it mistaking database metrics for business figures.
+UI_ONLY_KEYS = {"latency_ms", "roundtrip_ms", "rows_scanned"}
+
 MAX_TOOL_ROUNDS = 10
 
 # Free-tier daily quotas are per-model, so keep alternates ready: if the primary
@@ -221,6 +225,12 @@ class CineComputeAgent:
                     result_dict = {"result": result_str}
                 if not isinstance(result_dict, dict):
                     result_dict = {"result": result_dict}
+                else:
+                    # Engine telemetry is for the inspector, not the model: it once
+                    # reported `rows_scanned` (173,728) as the number of render
+                    # tasks in a sequence (83,485). The model only sees the data.
+                    result_dict = {k: v for k, v in result_dict.items()
+                                   if k not in UI_ONLY_KEYS}
 
                 function_responses.append(
                     types.Part.from_function_response(name=name, response=result_dict)
