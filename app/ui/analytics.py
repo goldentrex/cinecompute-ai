@@ -53,7 +53,8 @@ def load_dashboard():
                 100.0 * countIf(status != 'SUCCESS') / nullIf(count(), 0) AS failure_rate,
                 sumIf(cost_usd, status != 'SUCCESS')                      AS wasted,
                 count()                                                   AS events,
-                sumIf(compute_duration_sec, status != 'SUCCESS') / 3600.0 AS wasted_gpu_hours
+                sumIf(compute_duration_sec, status != 'SUCCESS') / 3600.0 AS wasted_gpu_hours,
+                countIf(status = 'SUCCESS')                               AS successful
             FROM {DB}.vfx_render_events
         """).result_rows[0]
 
@@ -110,7 +111,8 @@ def load_dashboard():
             SELECT
                 toDate(event_time)                            AS day,
                 round(sumIf(cost_usd, status = 'SUCCESS'), 2)  AS productive_usd,
-                round(sumIf(cost_usd, status != 'SUCCESS'), 2) AS wasted_usd
+                round(sumIf(cost_usd, status != 'SUCCESS'), 2) AS wasted_usd,
+                round(100.0 * countIf(status != 'SUCCESS') / nullIf(count(), 0), 2) AS failure_pct
             FROM {DB}.vfx_render_events
             GROUP BY day
             ORDER BY day
@@ -122,6 +124,7 @@ def load_dashboard():
             "wasted": kpi[2] or 0,
             "events": kpi[3] or 0,
             "wasted_gpu_hours": kpi[4] or 0,
+            "successful": kpi[5] or 0,
             "top_sequence": budget.iloc[0]["sequence_id"] if len(budget) else "N/A",
             "top_overrun": budget.iloc[0]["overrun_pct"] if len(budget) else 0,
             "over_budget_count": int((budget["overrun_pct"] > 0).sum()) if len(budget) else 0,

@@ -28,20 +28,34 @@ STATUS_COLORS = {
     "TIMEOUT": WARN,
 }
 
-FONT = ('-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, '
+FONT = ('Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, '
         '"Helvetica Neue", Arial, sans-serif')
 MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
 
+# Type scale (px) and a 4px vertical rhythm: every size and gap is drawn from
+# these, so nothing is picked ad hoc.
+SCALE = {"xs": 11.5, "sm": 12.5, "base": 14.5, "md": 15, "lg": 20, "xl": 28, "2xl": 40}
+
 CSS = f"""
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 <style>
+    :root {{
+        --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+        --s5: 24px; --s6: 32px; --s7: 48px;
+    }}
     [data-testid="stAppViewContainer"] {{ background-color: {BG}; }}
     [data-testid="stHeader"] {{ background: transparent; }}
-    .block-container {{ max-width: 1080px; padding-top: 1.6rem; padding-bottom: 8rem; }}
+    .block-container {{ max-width: 1080px; padding-top: var(--s5); padding-bottom: 128px; }}
 
     html, body, [data-testid="stAppViewContainer"] * {{
         font-family: {FONT};
         color: {INK};
-        font-size: 15px;
+        font-size: {SCALE["md"]}px;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        font-feature-settings: "cv05" 1, "ss01" 1;
     }}
     /* Streamlit draws its chevrons with a Material ligature font; the blanket
        font-family rule above would turn them into overlapping letter soup. */
@@ -73,17 +87,24 @@ CSS = f"""
             display: inline-block; }}
 
     /* ---- metric strip ---- */
-    .cards {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }}
+    .cards {{ display: grid; grid-template-columns: 1.35fr 1fr 1fr 1fr; gap: var(--s3); }}
     .card {{
         background: {SURFACE}; border: 1px solid {BORDER};
-        border-radius: 8px; padding: 14px 16px;
+        border-radius: 10px; padding: var(--s4);
+        transition: border-color .16s ease, box-shadow .16s ease;
     }}
+    .card:hover {{ border-color: {BORDER_STRONG}; }}
     .card.lead {{ border-color: {BORDER_STRONG}; box-shadow: 0 1px 2px rgba(16,24,40,.05); }}
     .metric-k {{
         font-size: 11.5px; font-weight: 600; letter-spacing: .4px;
         text-transform: uppercase; color: {MUTED};
     }}
-    .metric-v {{ font-size: 27px; font-weight: 650; letter-spacing: -.6px; margin-top: 6px; }}
+    .metric-v {{
+        font-size: {SCALE["xl"]}px; font-weight: 650;
+        letter-spacing: -1.1px; margin-top: var(--s1);
+        line-height: 1.15;
+    }}
+    .card.lead .metric-v {{ font-size: {SCALE["2xl"]}px; letter-spacing: -1.8px; }}
     .metric-d {{ font-size: 12.5px; color: {MUTED}; margin-top: 4px; }}
 
     .callout {{
@@ -155,22 +176,58 @@ CSS = f"""
     hr {{ border-color: {BORDER}; margin: 26px 0 18px 0; }}
     .foot {{ font-size: 12.5px; color: {FAINT}; margin-top: 8px; line-height: 1.7; }}
 
-    @media (max-width: 760px) {{ .cards {{ grid-template-columns: repeat(2, 1fr); }} }}
+    /* content settles in rather than popping */
+    .cards, .callout, .wfbox, [data-testid="stChatMessage"] {{
+        animation: rise .34s cubic-bezier(.16,.84,.44,1) both;
+    }}
+    @keyframes rise {{ from {{ opacity: 0; transform: translateY(6px); }} }}
+
+    .wfbox {{
+        background: {SURFACE}; border: 1px solid {BORDER};
+        border-radius: 10px; padding: var(--s3) var(--s4) var(--s2);
+        margin: var(--s3) 0;
+    }}
+
+    @media (prefers-reduced-motion: reduce) {{
+        .cards, .callout, .wfbox, [data-testid="stChatMessage"] {{ animation: none; }}
+    }}
+    @media (max-width: 860px) {{
+        .cards {{ grid-template-columns: repeat(2, 1fr); }}
+        .block-container {{ padding-left: var(--s4); padding-right: var(--s4); }}
+    }}
+    @media (max-width: 560px) {{
+        .cards {{ grid-template-columns: 1fr; }}
+        .card.lead .metric-v {{ font-size: {SCALE["xl"]}px; }}
+    }}
 </style>
 """
 
 
-def plotly_layout(fig, height=300, title=None):
+def plotly_layout(fig, height=300, title=None, grid="y"):
+    """Low-ink chart styling: no chrome, one axis of gridlines at most."""
     fig.update_layout(
         height=height,
-        title=dict(text=title, font=dict(size=14, color=MUTED), x=0, xanchor="left") if title else None,
+        title=dict(text=title, font=dict(size=SCALE["base"], color=MUTED),
+                   x=0, xanchor="left", y=0.97) if title else None,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color=INK, size=13, family=FONT),
-        margin=dict(l=8, r=8, t=40 if title else 8, b=46),
-        legend=dict(orientation="h", yanchor="top", y=-0.16, x=0, font=dict(size=12)),
-        hoverlabel=dict(bgcolor=SURFACE, font_size=13),
+        margin=dict(l=4, r=8, t=38 if title else 6, b=28),
+        showlegend=False,          # series are labelled directly instead
+        hoverlabel=dict(bgcolor=SURFACE, bordercolor=BORDER, font_size=13,
+                        font_family=FONT),
+        hovermode="x unified",
+        transition=dict(duration=280, easing="cubic-in-out"),
     )
-    fig.update_xaxes(gridcolor=BORDER, zerolinecolor=BORDER, tickfont=dict(size=12))
-    fig.update_yaxes(gridcolor=BORDER, zerolinecolor=BORDER, tickfont=dict(size=12))
+    fig.update_xaxes(showgrid=False, zeroline=False, showline=False,
+                     ticks="", tickfont=dict(size=12, color=MUTED))
+    fig.update_yaxes(showgrid=(grid == "y"), gridcolor="#eef1f5", zeroline=False,
+                     showline=False, ticks="", tickfont=dict(size=12, color=MUTED))
+    return fig
+
+
+def annotate(fig, x, y, text, color=INK, dy=-18):
+    """Label a series where it lives, instead of in a legend."""
+    fig.add_annotation(x=x, y=y, text=text, showarrow=False, yshift=-dy,
+                       font=dict(size=12.5, color=color, family=FONT))
     return fig

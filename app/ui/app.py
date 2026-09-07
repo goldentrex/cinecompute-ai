@@ -19,6 +19,7 @@ from app.agent.gemini_client import CineComputeAgent
 from app.config import settings
 from app.ui import theme
 from app.ui.analytics import load_dashboard
+from app.ui import workflow
 
 st.set_page_config(
     page_title="CineCompute AI",
@@ -68,10 +69,10 @@ def render_answer(text: str):
             st.markdown(money_safe(body))
 
 
-def render_steps(logs):
+def render_steps(logs, as_html=False):
     """What the agent asked the database, and how fast it answered."""
     if not logs:
-        return
+        return "" if as_html else None
     chips = []
     for i, log in enumerate(logs, 1):
         res, name = log["result"], log["tool"]
@@ -85,10 +86,10 @@ def render_steps(logs):
         ms = res.get("latency_ms")
         t = f' <span class="t">{ms} ms</span>' if ms is not None else ""
         chips.append(f'<span class="step"><b>{i}. {label}</b>{t}</span>')
-    st.markdown(
-        f'<div class="steps">{"".join(chips)}</div>',
-        unsafe_allow_html=True,
-    )
+    html = f'<div class="steps">{"".join(chips)}</div>'
+    if as_html:
+        return html
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_log(log, expanded=False):
@@ -187,12 +188,41 @@ for col, (label, question) in zip(st.columns(3), PRESETS):
         preset_clicked = question
 
 
+# Placeholders the tool callback paints into while the turn is still running,
+# so the pipeline animates with the work instead of after it.
+wf_slot = st.empty()
+steps_slot = st.empty()
+_live = {"queries": 0, "ms": 0.0, "steps": []}
+
+
+def _paint(phase, label=""):
+    wf_slot.markdown(
+        f'<div class="wfbox">{workflow.render(phase, _live["queries"], _live["ms"], label)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def mcp_callback(name, args, result_str):
+    """Log a tool execution and repaint the pipeline as it happens."""
     try:
         res_data = json.loads(result_str)
     except Exception:
         res_data = {"raw": result_str}
-    st.session_state.mcp_logs.append({"tool": name, "args": args, "result": res_data})
+
+    log = {"tool": name, "args": args, "result": res_data}
+    st.session_state.mcp_logs.append(log)
+    _live["steps"].append(log)
+
+    if name == "run_query":
+        _live["queries"] += 1
+        _live["ms"] += res_data.get("latency_ms") or 0
+        rows = res_data.get("row_count", 0)
+        label = f"Query {_live['queries']} returned {rows} row" + ("" if rows == 1 else "s")
+    else:
+        label = f"Inspecting {args.get('table_name', 'the schema')}"
+
+    _paint("querying", label)
+    steps_slot.markdown(render_steps(_live["steps"], as_html=True), unsafe_allow_html=True)
 
 
 prompt = st.chat_input("Or ask your own question…") or preset_clicked
@@ -211,8 +241,9 @@ if prompt:
         st.session_state.live_calls += 1
     st.session_state.messages = [{"role": "user", "content": prompt}]
     turn_start = len(st.session_state.mcp_logs)
-    with st.spinner("Reading the telemetry…"):
-        answer = st.session_state.agent.process_message(prompt, tool_callback=mcp_callback)
+    _paint("thinking", "Sending the question to Gemini")
+    answer = st.session_state.agent.process_message(prompt, tool_callback=mcp_callback)
+    _paint("answering", "Writing the analysis")
     st.session_state.messages.append({
         "role": "assistant",
         "content": answer,
@@ -225,11 +256,20 @@ if prompt:
 # The answer
 # --------------------------------------------------------------------------
 answer_msg = next((m for m in st.session_state.messages if m["role"] == "assistant"), None)
+
+# Paint the resting state of the pipeline: idle before anything is asked, and the
+# finished loop with its totals once an answer is on screen.
+_done_steps = (answer_msg or {}).get("steps") or []
+_done_ms = sum(l["result"].get("latency_ms") or 0 for l in _done_steps)
+_done_q = sum(1 for l in _done_steps if l["tool"] == "run_query")
+_paint("done" if answer_msg else "idle",
+       f"Answered from {_done_q} quer{'y' if _done_q == 1 else 'ies'}" if answer_msg else "")
+
 if answer_msg:
     question = next((m["content"] for m in st.session_state.messages if m["role"] == "user"), "")
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown(f'<div class="label">Answering · {question}</div>', unsafe_allow_html=True)
-    render_steps(answer_msg.get("steps"))
+    render_steps(_done_steps)
     render_answer(answer_msg["content"])
     if answer_msg.get("replayed"):
         st.caption("Replayed from a recorded run — no API quota used.")
@@ -245,39 +285,55 @@ st.markdown("<hr>", unsafe_allow_html=True)
 
 with st.expander("Show the numbers behind this"):
     st.markdown(
-        f'<div class="metric-row">'
-        f'<div><div class="metric-n">${kpis["total_spend"]:,.0f}</div>'
-        f'<div class="metric-l">total render spend</div></div>'
-        f'<div><div class="metric-n" style="color:{theme.LOSS}">{kpis["failure_rate"]:.1f}%</div>'
-        f'<div class="metric-l">of jobs failed</div></div>'
-        f'<div><div class="metric-n" style="color:{theme.LOSS}">${kpis["wasted"]:,.0f}</div>'
-        f'<div class="metric-l">produced no frame</div></div>'
-        f'<div><div class="metric-n">{kpis["wasted_gpu_hours"]:,.0f}</div>'
-        f'<div class="metric-l">GPU-hours burnt</div></div>'
+        f'<div class="cards">'
+        f'<div class="card"><div class="metric-k">Jobs</div>'
+        f'<div class="metric-v">{kpis["events"]:,}</div>'
+        f'<div class="metric-d">render tasks recorded</div></div>'
+        f'<div class="card"><div class="metric-k">Successful</div>'
+        f'<div class="metric-v">{kpis["successful"]:,}</div>'
+        f'<div class="metric-d">produced a frame</div></div>'
+        f'<div class="card"><div class="metric-k">GPU-hours lost</div>'
+        f'<div class="metric-v" style="color:{theme.LOSS}">{kpis["wasted_gpu_hours"]:,.0f}</div>'
+        f'<div class="metric-d">spent on failed jobs</div></div>'
+        f'<div class="card"><div class="metric-k">Over budget</div>'
+        f'<div class="metric-v" style="color:{theme.WARN}">{kpis["over_budget_count"]}</div>'
+        f'<div class="metric-d">of 3 sequences</div></div>'
         f'</div>',
         unsafe_allow_html=True,
     )
 
-    b = frames["budget"]
+    bd = frames["burn"]
     fig = go.Figure()
-    fig.add_bar(name="Budget", x=b["sequence_id"], y=b["budget_usd"], marker_color="#d8d4ca")
-    fig.add_bar(name="Actually spent", x=b["sequence_id"], y=b["spend_usd"],
-                marker_color=[theme.LOSS if p > 0 else theme.GAIN for p in b["overrun_pct"]],
-                text=[f"{p:+.0f}%" for p in b["overrun_pct"]],
-                textposition="outside", textfont=dict(size=15))
-    fig.update_layout(barmode="group", yaxis_title="USD")
-    st.plotly_chart(theme.plotly_layout(fig, 320, "Budget vs actual spend"),
+    fig.add_scatter(
+        x=bd["day"], y=bd["productive_usd"], name="Productive",
+        mode="lines", line=dict(color=theme.BORDER_STRONG, width=2, shape="spline", smoothing=1.0),
+        fill="tozeroy", fillcolor="rgba(205,213,223,.28)", hovertemplate="%{y:$,.0f} productive<extra></extra>",
+    )
+    fig.add_scatter(
+        x=bd["day"], y=bd["wasted_usd"], name="Wasted",
+        mode="lines", line=dict(color=theme.LOSS, width=2.6, shape="spline", smoothing=1.0),
+        fill="tozeroy", fillcolor="rgba(220,38,38,.14)", hovertemplate="%{y:$,.0f} wasted<extra></extra>",
+    )
+    theme.annotate(fig, bd["day"].iloc[-1], bd["wasted_usd"].iloc[-1], "Wasted", theme.LOSS, dy=14)
+    theme.annotate(fig, bd["day"].iloc[len(bd) // 2], bd["productive_usd"].iloc[len(bd) // 2],
+                   "Productive", theme.MUTED, dy=-14)
+    st.plotly_chart(theme.plotly_layout(fig, 260, "Daily spend"),
                     use_container_width=True, config={"displayModeBar": False})
 
-    w = frames["waste"]
+    b = frames["budget"]
     fig = go.Figure()
-    for status in ("OOM_KILLED", "DRIVER_CRASH", "TIMEOUT"):
-        part = w[w["status"] == status]
-        if len(part):
-            fig.add_bar(name=status, x=part["software"], y=part["wasted_usd"],
-                        marker_color=theme.STATUS_COLORS[status])
-    fig.update_layout(barmode="stack", yaxis_title="Wasted USD")
-    st.plotly_chart(theme.plotly_layout(fig, 320, "Where the money burns"),
+    fig.add_bar(name="Budget", x=b["sequence_id"], y=b["budget_usd"],
+                marker=dict(color="#e8ecf2", line=dict(width=0)),
+                hovertemplate="budget %{y:$,.0f}<extra></extra>")
+    fig.add_bar(name="Spent", x=b["sequence_id"], y=b["spend_usd"],
+                marker=dict(color=[theme.LOSS if p > 0 else theme.GAIN for p in b["overrun_pct"]],
+                            line=dict(width=0)),
+                text=[f"{p:+.0f}%" for p in b["overrun_pct"]], textposition="outside",
+                textfont=dict(size=13, family=theme.FONT),
+                hovertemplate="spent %{y:$,.0f}<extra></extra>")
+    fig.update_layout(barmode="group", bargap=0.45, bargroupgap=0.08)
+    fig.update_traces(marker_cornerradius=5, selector=dict(type="bar"))
+    st.plotly_chart(theme.plotly_layout(fig, 280, "Budget vs actual spend"),
                     use_container_width=True, config={"displayModeBar": False})
 
     h = frames["hotspots"].copy()

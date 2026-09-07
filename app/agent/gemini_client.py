@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from google import genai
 from google.genai import types
@@ -152,10 +153,14 @@ class CineComputeAgent:
             recorded = cache.load(user_message)
             if recorded:
                 # Replay the recorded tool calls through the same callback so the
-                # MCP inspector fills in exactly as it did on the live run.
+                # pipeline and inspector fill in as they did on the live run. A
+                # small pace keeps that visible; set REPLAY_STEP_DELAY=0 to skip.
+                delay = float(os.environ.get("REPLAY_STEP_DELAY", "0.45"))
                 for call in recorded.get("tool_calls", []):
                     if tool_callback:
                         tool_callback(call["name"], call.get("args", {}), call["result"])
+                        if delay:
+                            time.sleep(delay)
                 self.replayed = True
                 self.model_name = recorded.get("model", self.model_name)
                 return recorded["answer"]
