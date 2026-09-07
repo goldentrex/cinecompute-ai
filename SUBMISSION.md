@@ -34,7 +34,12 @@ runs a question that is never cached, so what you watch is the real loop.
 database. It is shown the claim but never its value, writes one query per figure,
 and the comparison is arithmetic — no model decides whether a number is right.
 Against an answer with two deliberately falsified figures it contradicts exactly
-those two; against the real answers it re-derives 16 of 17.
+those two; against the real answers it re-derives 16 of 17. The seventeenth is
+left in the demo on purpose: on "which GPUs waste the most money?", the analysis
+attributes $15,658.29 to driver crashes when the query behind it also counted OOM
+kills and timeouts — the true crash figure is $14,590.64. The app shows that gap
+in the page, beside the answer, with the query that found it. A verifier that only
+ever agrees is decoration.
 
 **Reads the calendar, not just the budget.** `production_budgets` carries a
 delivery date. Two sequences have already spent their budget with 38 and 55 days

@@ -21,3 +21,6 @@ paper/
 # never commit a service account key
 *service-account*.json
 gcp-key*.json
+
+# local dev launch config
+.claude/

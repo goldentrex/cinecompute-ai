@@ -134,6 +134,29 @@ CSS = f"""
     }}
     .vdot {{ width: 7px; height: 7px; border-radius: 50%; flex: none; }}
 
+    /* A flagged claim is the verifier working, not the app failing: show it in
+       full rather than hiding it behind an expander, and in amber not red. */
+    .vflag {{
+        background: {SURFACE}; border: 1px solid {BORDER};
+        border-left: 3px solid {WARN};
+        border-radius: 8px; padding: 12px var(--s4); margin: -2px 0 var(--s3) 0;
+    }}
+    .vflag-what {{ font-size: 13px; color: {MUTED}; margin-bottom: 8px; }}
+    .vflag-nums {{ display: flex; gap: var(--s5); flex-wrap: wrap; }}
+    .vflag-num {{ min-width: 128px; }}
+    .vflag-k {{
+        font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase;
+        color: {FAINT}; display: block; margin-bottom: 2px;
+    }}
+    .vflag-v {{
+        font: 600 17px {MONO}; font-variant-numeric: tabular-nums; color: {INK};
+    }}
+    .vflag-v.gap {{ color: {WARN}; }}
+    .vflag-why {{
+        font-size: 12.5px; color: {MUTED}; line-height: 1.55;
+        margin-top: 10px; padding-top: 10px; border-top: 1px solid {BORDER};
+    }}
+
     .lead {{
         font-size: 14px; color: {MUTED}; line-height: 1.6;
         margin: -4px 0 var(--s3) 0; max-width: 720px;

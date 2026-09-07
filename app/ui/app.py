@@ -1,3 +1,4 @@
+import html
 import json
 import os
 import re
@@ -71,6 +72,49 @@ def render_answer(text: str):
             st.markdown(money_safe(body))
 
 
+def _num(v, money):
+    """Format a checked figure. `&#36;` not `$`: Streamlit reads `$...$` as LaTeX."""
+    if v is None:
+        return "not reproducible"
+    return ("&#36;" if money else "") + f"{v:,.2f}".removesuffix(".00" if not money else "")
+
+
+def render_flag(v):
+    """Show a caught discrepancy in full, in the page, at the moment it is caught.
+
+    A mismatch is the verifier doing its job, so it must read that way. Hiding it
+    behind an expander leaves a judge with a red banner and no way to tell whether
+    the product is unreliable or whether the check is.
+    """
+    money = "$" in (v.get("context") or "")
+    stated, found = v["expected"], v["found"]
+    gap = None if found is None else stated - found
+    what = v.get("checking") or "the figure in the sentence below"
+    sentence = html.escape((v.get("context") or "")).replace("*", "").strip()
+    sentence = sentence.replace("$", "&#36;")
+    nums = [("Analysis stated", _num(stated, money), ""),
+            ("Database returns", _num(found, money), "")]
+    if gap:
+        nums.append(("Difference", _num(abs(gap), money), " gap"))
+
+    cells = "".join(
+        f'<div class="vflag-num"><span class="vflag-k">{k}</span>'
+        f'<span class="vflag-v{cls}">{val}</span></div>'
+        for k, val, cls in nums
+    )
+    st.markdown(
+        f'<div class="vflag">'
+        f'<div class="vflag-what">Flagged: <b>{what}</b></div>'
+        f'<div class="vflag-nums">{cells}</div>'
+        f'<div class="vflag-why">In the analysis: \u201c{sentence}\u201d<br>'
+        f'The check query below recomputed this figure from the '
+        f'raw events and got a different answer. Nothing was corrected automatically - '
+        f'the point is that the discrepancy is visible instead of being read as fact.'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_verification(verdicts, summary):
     """A second agent re-derived each figure from the database. Show the result."""
     if not summary or not summary.get("checked"):
@@ -78,11 +122,11 @@ def render_verification(verdicts, summary):
 
     confirmed, checked = summary["confirmed"], summary["checked"]
     contradicted = summary.get("contradicted", 0)
-    colour = theme.GAIN if contradicted == 0 else theme.LOSS
+    colour = theme.GAIN if contradicted == 0 else theme.WARN
     label = (f"{confirmed} of {checked} figures re-derived from the database"
              if contradicted == 0 else
-             f"{confirmed} of {checked} re-derived, {contradicted} did not match "
-             f"the check query")
+             f"{confirmed} of {checked} figures re-derived · "
+             f"{contradicted} flagged as not reproducible")
 
     st.markdown(
         f'<div class="verif" style="border-color:{colour}">'
@@ -91,21 +135,26 @@ def render_verification(verdicts, summary):
         unsafe_allow_html=True,
     )
 
+    for v in verdicts:
+        if v["status"] == "contradicted":
+            render_flag(v)
+
     with st.expander("See each check"):
         st.caption(
             "The verifier is never shown the figure it is checking. It writes one "
             "query per claim, the query runs against ClickHouse through MCP, and the "
             "comparison is arithmetic - no model decides whether a number is right. "
-            "A mismatch (≠) means the check did not reproduce the figure: read the "
+            "A flag (≠) means the check did not reproduce the figure: read the "
             "query, since it can also mean the check measured something slightly "
             "different."
         )
         for v in verdicts:
             mark = {"confirmed": "✓", "contradicted": "≠", "unchecked": "–"}[v["status"]]
-            found = f'{v["found"]:,.2f}' if v["found"] is not None else "not reproducible"
-            st.markdown(
-                f'`{mark}` **{v["claim"]}** — re-derived: {found}'.replace("$", r"\$")
-            )
+            what = v.get("checking") or v["claim"]
+            money = "$" in (v.get("context") or "")
+            line = (f'`{mark}` **{what}** — analysis: {_num(v["expected"], money)} · '
+                    f're-derived: {_num(v["found"], money)}')
+            st.markdown(line)
             st.code(v["sql"], language="sql")
 
 
