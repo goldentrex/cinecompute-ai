@@ -131,20 +131,43 @@ if db_error:
     st.error(f"Cannot reach ClickHouse, so there is nothing to report.\n\n`{db_error}`")
     st.stop()
 
-st.markdown('<div class="eyebrow">Render farm · last 30 days</div>', unsafe_allow_html=True)
-st.markdown(f'<div class="headline">${kpis["recoverable"]:,.0f}</div>', unsafe_allow_html=True)
 st.markdown(
-    f'<p class="standfirst">of your <b>${kpis["wasted"]:,.0f}</b> in wasted render spend is '
-    f'recoverable. Two faults cause most of it, and both are fixable in the pipeline today.</p>',
-    unsafe_allow_html=True,
-)
-st.markdown(
-    f'<div class="footnote">Out of ${kpis["total_spend"]:,.0f} spent across '
-    f'{kpis["events"]:,} render jobs · {kpis["failure_rate"]:.0f}% of them failed</div>',
+    f'<div class="topbar">'
+    f'<div class="brand">CineCompute <span>· render farm FinOps</span></div>'
+    f'<div><span class="pill"><span class="dot"></span>ClickHouse · '
+    f'{kpis["events"]:,} events</span></div>'
+    f'</div>',
     unsafe_allow_html=True,
 )
 
-st.markdown("<hr>", unsafe_allow_html=True)
+waste_pct = 100.0 * kpis["wasted"] / kpis["total_spend"] if kpis["total_spend"] else 0
+st.markdown(
+    f'<div class="cards">'
+    f'<div class="card lead"><div class="metric-k">Recoverable</div>'
+    f'<div class="metric-v" style="color:{theme.GAIN}">${kpis["recoverable"]:,.0f}</div>'
+    f'<div class="metric-d">from 2 systemic faults</div></div>'
+    f'<div class="card"><div class="metric-k">Wasted spend</div>'
+    f'<div class="metric-v" style="color:{theme.LOSS}">${kpis["wasted"]:,.0f}</div>'
+    f'<div class="metric-d">{waste_pct:.0f}% of all spend</div></div>'
+    f'<div class="card"><div class="metric-k">Failure rate</div>'
+    f'<div class="metric-v">{kpis["failure_rate"]:.1f}%</div>'
+    f'<div class="metric-d">{kpis["wasted_gpu_hours"]:,.0f} GPU-hours lost</div></div>'
+    f'<div class="card"><div class="metric-k">Total spend</div>'
+    f'<div class="metric-v">${kpis["total_spend"]:,.0f}</div>'
+    f'<div class="metric-d">{kpis["events"]:,} render jobs</div></div>'
+    f'</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    f'<div class="callout">Two faults account for most of the waste: '
+    f'<b>${kpis["oom_waste"]:,.0f}</b> of Houdini Karma out-of-memory kills on '
+    f'SEQ_010_SPACE_BATTLE, and <b>${kpis["crash_waste"]:,.0f}</b> of L40S driver '
+    f'crashes on SEQ_045_UNDERWATER. Both are fixable in the pipeline today.</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown('<div class="label">Ask the agent</div>', unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------
 # Ask
@@ -205,7 +228,7 @@ answer_msg = next((m for m in st.session_state.messages if m["role"] == "assista
 if answer_msg:
     question = next((m["content"] for m in st.session_state.messages if m["role"] == "user"), "")
     st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown(f'<div class="eyebrow">Answering: {question}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="label">Answering · {question}</div>', unsafe_allow_html=True)
     render_steps(answer_msg.get("steps"))
     render_answer(answer_msg["content"])
     if answer_msg.get("replayed"):
@@ -262,7 +285,7 @@ with st.expander("Show the numbers behind this"):
     st.dataframe(h, width="stretch", hide_index=True)
 
 st.markdown(
-    f'<div class="footnote">Gemini <code>{st.session_state.agent.model_name}</code> writing its own '
+    f'<div class="foot">Gemini <code>{st.session_state.agent.model_name}</code> writing its own '
     f'read-only SQL against ClickHouse · dashboard computed in '
     f'{timing["total_ms"]:.0f} ms of engine time over {timing["rows_scanned"]:,} rows'
     + (f' · {max(0, LIVE_QUESTION_BUDGET - st.session_state.live_calls)} live questions left'

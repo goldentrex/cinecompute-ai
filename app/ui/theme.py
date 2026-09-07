@@ -1,166 +1,176 @@
-"""Light editorial theme.
+"""Product-UI theme following data-tooling conventions.
 
-The first version was a dark "VFX studio" dashboard that accumulated panels
-until nothing stood out. This one is built the other way round: one question is
-answered per screen, in type large enough to read on video, and everything else
-waits behind a disclosure.
+Neutral cool greys, a single blue primary, semantic status colours, a system
+font stack and tabular figures - the idiom of Linear, Stripe and observability
+consoles, rather than an editorial or brand-led look.
 """
 
-INK = "#14141a"        # primary text
-MUTED = "#6b6b76"      # secondary text
-FAINT = "#9a9aa4"
-BG = "#faf9f6"         # page
-PANEL = "#ffffff"      # cards
-BORDER = "#e6e3dc"
+# neutral ramp
+BG = "#f7f8fa"
+SURFACE = "#ffffff"
+BORDER = "#e3e8ef"
+BORDER_STRONG = "#cdd5df"
+INK = "#0f172a"
+MUTED = "#64748b"
+FAINT = "#94a3b8"
 
-LOSS = "#c0392b"       # money burnt
-GAIN = "#1f7a5c"       # money recoverable
-NEUTRAL = "#5b6b8c"    # everything else
-WARN = "#b8860b"
+# semantic
+PRIMARY = "#2563eb"
+LOSS = "#dc2626"
+WARN = "#d97706"
+GAIN = "#059669"
+VIOLET = "#7c3aed"
 
 STATUS_COLORS = {
-    "SUCCESS": "#c8cdd6",
+    "SUCCESS": "#cbd5e1",
     "OOM_KILLED": LOSS,
-    "DRIVER_CRASH": "#8e44ad",
+    "DRIVER_CRASH": VIOLET,
     "TIMEOUT": WARN,
 }
+
+FONT = ('-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, '
+        '"Helvetica Neue", Arial, sans-serif')
+MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
 
 CSS = f"""
 <style>
     [data-testid="stAppViewContainer"] {{ background-color: {BG}; }}
     [data-testid="stHeader"] {{ background: transparent; }}
-    /* the chat input is fixed to the bottom; leave room so it never covers text */
-    .block-container {{ max-width: 940px; padding-top: 2.2rem; padding-bottom: 8rem; }}
+    .block-container {{ max-width: 1080px; padding-top: 1.6rem; padding-bottom: 8rem; }}
 
     html, body, [data-testid="stAppViewContainer"] * {{
+        font-family: {FONT};
         color: {INK};
-        font-size: 17px;
+        font-size: 15px;
+    }}
+    /* Streamlit draws its chevrons with a Material ligature font; the blanket
+       font-family rule above would turn them into overlapping letter soup. */
+    [data-testid="stIconMaterial"],
+    .material-symbols-rounded,
+    [class*="material-symbols"],
+    span[data-testid="stExpanderToggleIcon"] {{
+        font-family: "Material Symbols Rounded", "Material Symbols Outlined" !important;
     }}
 
-    /* --- the one thing on screen --- */
-    .eyebrow {{
-        font-size: 13px;
-        letter-spacing: 2px;
-        text-transform: uppercase;
-        color: {MUTED};
-        font-weight: 600;
-        margin-bottom: 10px;
-    }}
-    .headline {{
-        font-size: 62px;
-        line-height: 1.03;
-        font-weight: 700;
-        letter-spacing: -2px;
-        color: {LOSS};
-        margin: 0;
-    }}
-    .standfirst {{
-        font-size: 21px;
-        line-height: 1.5;
-        color: {INK};
-        margin: 16px 0 6px 0;
-        max-width: 660px;
-    }}
-    .standfirst b {{ color: {LOSS}; font-weight: 650; }}
-    .footnote {{ font-size: 15px; color: {MUTED}; margin-top: 10px; }}
+    /* figures line up in columns, as in any real console */
+    .tnum, .metric-v, .step .t {{ font-variant-numeric: tabular-nums; }}
 
-    hr {{ border-color: {BORDER}; margin: 30px 0 22px 0; }}
+    /* ---- top bar ---- */
+    .topbar {{
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; padding-bottom: 14px; margin-bottom: 18px;
+        border-bottom: 1px solid {BORDER};
+    }}
+    .brand {{ font-size: 15px; font-weight: 650; letter-spacing: -0.2px; }}
+    .brand span {{ color: {MUTED}; font-weight: 450; }}
+    .pill {{
+        display: inline-flex; align-items: center; gap: 6px;
+        background: {SURFACE}; border: 1px solid {BORDER};
+        border-radius: 6px; padding: 4px 9px;
+        font-size: 12px; color: {MUTED};
+    }}
+    .dot {{ width: 6px; height: 6px; border-radius: 50%; background: {GAIN};
+            display: inline-block; }}
 
-    /* --- answer sections --- */
+    /* ---- metric strip ---- */
+    .cards {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }}
+    .card {{
+        background: {SURFACE}; border: 1px solid {BORDER};
+        border-radius: 8px; padding: 14px 16px;
+    }}
+    .card.lead {{ border-color: {BORDER_STRONG}; box-shadow: 0 1px 2px rgba(16,24,40,.05); }}
+    .metric-k {{
+        font-size: 11.5px; font-weight: 600; letter-spacing: .4px;
+        text-transform: uppercase; color: {MUTED};
+    }}
+    .metric-v {{ font-size: 27px; font-weight: 650; letter-spacing: -.6px; margin-top: 6px; }}
+    .metric-d {{ font-size: 12.5px; color: {MUTED}; margin-top: 4px; }}
+
+    .callout {{
+        background: {SURFACE}; border: 1px solid {BORDER};
+        border-left: 3px solid {PRIMARY};
+        border-radius: 8px; padding: 14px 16px; margin: 12px 0 2px 0;
+        font-size: 14.5px; line-height: 1.6; color: {INK};
+    }}
+    .callout b {{ font-weight: 650; }}
+
+    .label {{
+        font-size: 11.5px; font-weight: 600; letter-spacing: .5px;
+        text-transform: uppercase; color: {MUTED}; margin: 26px 0 10px 0;
+    }}
+
+    /* ---- answer sections ---- */
     .sec-head {{
-        font-size: 12.5px;
-        font-weight: 700;
-        letter-spacing: 1.6px;
-        text-transform: uppercase;
-        margin: 0 0 10px 0;
-        color: {MUTED};
+        font-size: 11.5px; font-weight: 700; letter-spacing: .6px;
+        text-transform: uppercase; margin: 0 0 8px 0; color: {MUTED};
     }}
-    .sec-head.cause {{ color: {NEUTRAL}; }}
+    .sec-head.cause {{ color: {PRIMARY}; }}
     .sec-head.money {{ color: {LOSS}; }}
     .sec-head.fix   {{ color: {GAIN}; }}
 
     [data-testid="stChatMessage"] {{ background: transparent; padding: 0; }}
-    [data-testid="stChatMessage"] p,
-    [data-testid="stChatMessage"] li {{ font-size: 17px; line-height: 1.68; }}
+    [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li {{
+        font-size: 14.5px; line-height: 1.62;
+    }}
     [data-testid="stVerticalBlockBorderWrapper"] {{
-        background: {PANEL};
-        border-radius: 12px;
+        background: {SURFACE}; border-radius: 8px;
     }}
 
-    /* --- agent step trail --- */
-    .steps {{ margin: 4px 0 18px 0; line-height: 2.2; }}
+    /* ---- query trail ---- */
+    .steps {{ margin: 2px 0 14px 0; }}
     .step {{
-        display: inline-block;
-        background: {PANEL};
-        border: 1px solid {BORDER};
-        border-radius: 999px;
-        padding: 5px 13px;
-        margin: 0 7px 6px 0;
-        font-size: 13px;
-        color: {MUTED};
+        display: inline-flex; align-items: center; gap: 8px;
+        background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 6px;
+        padding: 5px 10px; margin: 0 6px 6px 0;
+        font-size: 12.5px; color: {MUTED}; font-family: {MONO};
     }}
     .step b {{ color: {INK}; font-weight: 600; }}
-    .step .t {{ color: {GAIN}; font-weight: 600; }}
+    .step .t {{ color: {GAIN}; }}
 
-    /* --- buttons: the primary call to action --- */
+    /* ---- buttons ---- */
     .stButton > button {{
-        background: {PANEL};
-        border: 1px solid {BORDER};
-        border-radius: 10px;
-        padding: 16px 14px;
-        font-size: 16px;
-        font-weight: 600;
-        color: {INK};
-        line-height: 1.35;
-        height: 100%;
-        transition: border-color .15s, box-shadow .15s;
+        background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 8px;
+        padding: 13px 14px; font-size: 14px; font-weight: 550; color: {INK};
+        line-height: 1.4; height: 100%; text-align: left;
+        transition: border-color .12s, box-shadow .12s;
     }}
-    /* Streamlit truncates button labels with an ellipsis; these are questions,
-       so let them wrap onto two lines instead of losing their ending. */
-    .stButton > button p,
-    .stButton > button div {{
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-        line-height: 1.35;
+    .stButton > button p, .stButton > button div {{
+        white-space: normal !important; overflow: visible !important;
+        text-overflow: clip !important; line-height: 1.4;
     }}
     .stButton > button:hover {{
-        border-color: {INK};
-        box-shadow: 0 2px 10px rgba(0,0,0,.06);
-        color: {INK};
+        border-color: {PRIMARY}; color: {PRIMARY};
+        box-shadow: 0 1px 3px rgba(37,99,235,.14);
     }}
 
     code {{
-        font-size: 14px !important;
-        background: #f2f0ea !important;
-        color: #333 !important;
+        font-family: {MONO}; font-size: 13px !important;
+        background: #eef2f6 !important; color: #334155 !important;
+        border-radius: 4px; padding: 1px 5px;
     }}
     [data-testid="stExpander"] details {{
-        border: 1px solid {BORDER};
-        border-radius: 10px;
-        background: {PANEL};
+        border: 1px solid {BORDER}; border-radius: 8px; background: {SURFACE};
     }}
-    [data-testid="stExpander"] summary {{ font-size: 16px; font-weight: 600; }}
+    [data-testid="stExpander"] summary {{ font-size: 14px; font-weight: 600; }}
+    hr {{ border-color: {BORDER}; margin: 26px 0 18px 0; }}
+    .foot {{ font-size: 12.5px; color: {FAINT}; margin-top: 8px; line-height: 1.7; }}
 
-    .metric-row {{ display: flex; gap: 34px; flex-wrap: wrap; margin: 6px 0 4px 0; }}
-    .metric-n {{ font-size: 30px; font-weight: 700; letter-spacing: -0.6px; }}
-    .metric-l {{ font-size: 13.5px; color: {MUTED}; margin-top: 2px; }}
+    @media (max-width: 760px) {{ .cards {{ grid-template-columns: repeat(2, 1fr); }} }}
 </style>
 """
 
 
 def plotly_layout(fig, height=300, title=None):
-    """Light, low-ink chart styling."""
     fig.update_layout(
         height=height,
-        title=dict(text=title, font=dict(size=16, color=INK), x=0, xanchor="left") if title else None,
+        title=dict(text=title, font=dict(size=14, color=MUTED), x=0, xanchor="left") if title else None,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=INK, size=14),
-        margin=dict(l=10, r=10, t=46 if title else 10, b=50),
-        legend=dict(orientation="h", yanchor="top", y=-0.16, x=0, font=dict(size=13)),
-        hoverlabel=dict(bgcolor=PANEL, font_size=14),
+        font=dict(color=INK, size=13, family=FONT),
+        margin=dict(l=8, r=8, t=40 if title else 8, b=46),
+        legend=dict(orientation="h", yanchor="top", y=-0.16, x=0, font=dict(size=12)),
+        hoverlabel=dict(bgcolor=SURFACE, font_size=13),
     )
-    fig.update_xaxes(gridcolor=BORDER, zerolinecolor=BORDER, tickfont=dict(size=13))
-    fig.update_yaxes(gridcolor=BORDER, zerolinecolor=BORDER, tickfont=dict(size=13))
+    fig.update_xaxes(gridcolor=BORDER, zerolinecolor=BORDER, tickfont=dict(size=12))
+    fig.update_yaxes(gridcolor=BORDER, zerolinecolor=BORDER, tickfont=dict(size=12))
     return fig

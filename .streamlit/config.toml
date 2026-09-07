@@ -1,10 +1,10 @@
-# Light editorial theme applied on first paint, so the page never flashes dark.
+# Light product theme applied on first paint, so the page never flashes dark.
 [theme]
 base = "light"
-primaryColor = "#c0392b"
-backgroundColor = "#faf9f6"
+primaryColor = "#2563eb"
+backgroundColor = "#f7f8fa"
 secondaryBackgroundColor = "#ffffff"
-textColor = "#14141a"
+textColor = "#0f172a"
 
 [server]
 headless = true
