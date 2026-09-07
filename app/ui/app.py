@@ -218,8 +218,9 @@ for col, (label, question) in zip(st.columns(3), PRESETS):
 # A recorded answer cannot prove the agent writes its own SQL. This one is never
 # cached: it always runs live, so the pipeline and the queries are the real thing.
 LIVE_PROBE = (
-    "Pick the single worst shot_id in the whole farm by wasted spend, say which "
-    "software and GPU it ran on, and what you would change."
+    "Across the whole farm, which single shot_id wastes the most money? Group by "
+    "shot_id alone so the total is not split. Then, for that shot, break its failures "
+    "down by software and GPU, and say what you would change."
 )
 if st.button("▶  Watch it work live  ·  runs a fresh, unrecorded question",
              width="stretch", disabled=st.session_state.agent.client is None):
