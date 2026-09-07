@@ -1,7 +1,31 @@
 # 🎬 CineCompute AI
 **Google Agentic Cinema Track Submission — ClickHouse Partner Track**
 
-CineCompute AI is an autonomous VFX render-farm FinOps agent powered by **Gemini** and connected via an **MCP (Model Context Protocol)** tool bridge to **ClickHouse**. It analyses 250,000+ render farm telemetry events in milliseconds, diagnoses OOM silent kills and driver crashes, correlates them with production budgets, and prescribes actionable pipeline fixes.
+CineCompute AI is an autonomous VFX render-farm FinOps agent. **Gemini** (via `google-genai`)
+reaches **ClickHouse Cloud** exclusively through the **official ClickHouse MCP server**
+(`mcp-clickhouse`), spoken over MCP's stdio transport. It analyses 250,000 render telemetry
+events, diagnoses OOM kills and driver crashes, correlates them with production budgets, and
+prescribes actionable pipeline fixes.
+
+**Google Cloud Agentic Cinema hackathon — ClickHouse partner track.**
+
+## How the agent reaches the data
+
+```
+Streamlit UI  ──►  Gemini (google-genai, manual tool loop)
+                        │  tools/list, tools/call   (MCP, stdio)
+                        ▼
+                 mcp-clickhouse 0.6  ──►  ClickHouse Cloud
+```
+
+The agent has no database driver of its own. `app/agent/mcp_client.py` launches the official
+server as a subprocess, calls `initialize`, discovers the tools it publishes with `tools/list`
+(`list_databases`, `list_tables`, `run_query`), and every statement the model writes goes out
+as a `tools/call`. Writes are refused twice: the server opens ClickHouse with `readonly=1`,
+and a statement allowlist rejects anything that is not a read before it leaves the client.
+
+The dashboard figures at the top of the page are read with `clickhouse-connect` directly —
+that path has no model in it; everything the agent does goes through MCP.
 
 ## Architecture
 
@@ -16,8 +40,8 @@ graph TD
 ## Features
 - **OOM Silent Kill Detection** — pinpoints the software/GPU/sequence combination burning VRAM.
 - **Financial Impact Analysis** — wasted compute dollars and budget overrun, computed in ClickHouse.
-- **Live MCP Query Inspector** — every tool call streams into the UI as it executes: arguments, the exact SQL, server-side latency, and a dataframe preview.
-- **Read-only by construction** — `readonly=1` on the connection, plus a statement allowlist that rejects DDL/DML and multi-statement input.
+- **Live MCP inspector** — every `tools/call` streams into the UI as it executes: the exact SQL, latency, and a preview of the rows returned.
+- **Read-only by construction** — the MCP server runs ClickHouse with `readonly=1`, and a client-side allowlist rejects non-read statements.
 - **Model failover** — quota (429), retirement (404) and capacity (503) errors transparently move the session to the next Gemini flash model.
 
 ## Data model
@@ -52,9 +76,9 @@ cp .env.example .env
 # set GEMINI_API_KEY and your ClickHouse credentials
 ```
 
-### 2. Local run (Python)
+### 2. Local run (Python 3.10+ — `mcp` requires it)
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python scripts/seed_vfx_data.py      # creates tables + 250k rows, then verifies
 python scripts/health_check.py       # preflight: ClickHouse, MCP tools, Gemini

@@ -13,3 +13,5 @@ htmlcov/
 .env.backup*
 .DS_Store
 paper/
+
+.venv314/

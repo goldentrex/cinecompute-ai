@@ -3,6 +3,9 @@
 # unbounded install on a fresh host would pull them and can break the agent loop
 # or the dataframe rendering on first boot.
 google-genai>=1.47,<2
+# ClickHouse is reached only through the official MCP server, as the track requires
+mcp>=2.0,<3
+mcp-clickhouse>=0.6,<1
 clickhouse-connect>=0.15,<1
 pydantic>=2.5,<3
 pydantic-settings>=2.1,<3

@@ -4,59 +4,18 @@ import time
 from google import genai
 from google.genai import types
 from app.config import settings
-from app.agent.mcp_bridge import list_tables, describe_table, run_query
+from app.agent.mcp_client import ClickHouseMCP, run_async
 from app.agent.prompts import SYSTEM_INSTRUCTION
 from app.agent import cache
 
-# Explicit declarations instead of raw callables: the SDK would otherwise run
-# Automatic Function Calling and execute the tools itself, which bypasses our
-# loop and leaves the Live MCP Query Inspector empty.
-TOOL_DECLARATIONS = [
-    types.FunctionDeclaration(
-        name="list_tables",
-        description="List the tables available in the render farm telemetry database.",
-        parameters=types.Schema(type=types.Type.OBJECT, properties={}),
-    ),
-    types.FunctionDeclaration(
-        name="describe_table",
-        description="Return the column names and ClickHouse data types of a table.",
-        parameters=types.Schema(
-            type=types.Type.OBJECT,
-            properties={
-                "table_name": types.Schema(
-                    type=types.Type.STRING,
-                    description="Table name without database prefix, e.g. vfx_render_events.",
-                )
-            },
-            required=["table_name"],
-        ),
-    ),
-    types.FunctionDeclaration(
-        name="run_query",
-        description=(
-            "Execute a single read-only ClickHouse SELECT statement and return up to "
-            "50 rows as JSON, together with server-side latency and row count."
-        ),
-        parameters=types.Schema(
-            type=types.Type.OBJECT,
-            properties={
-                "sql_query": types.Schema(
-                    type=types.Type.STRING,
-                    description=(
-                        "A ClickHouse SQL SELECT statement. Fully qualify tables as "
-                        f"{settings.clickhouse_database}.<table>. No semicolon, no DDL, no DML."
-                    ),
-                )
-            },
-            required=["sql_query"],
-        ),
-    ),
-]
+# The tool list is no longer written here: it is discovered from the ClickHouse
+# MCP server at `tools/list`, so the agent can only call what the server offers.
 
-# Keys the MCP bridge returns for the UI that must never reach the model, to
-# stop it mistaking database metrics for business figures.
+# Keys added for the inspector that must never reach the model, to stop it
+# mistaking database metrics for business figures.
 UI_ONLY_KEYS = {"latency_ms", "roundtrip_ms", "rows_scanned"}
 
+MAX_ROWS = 50
 MAX_TOOL_ROUNDS = 10
 
 # Free-tier daily quotas are per-model, so keep alternates ready: if the primary
@@ -74,15 +33,41 @@ FALLBACK_MODELS = [
 ]
 
 
+def _wrap_mcp_result(name, args, payload, elapsed_ms, failed):
+    """Normalise an MCP tool result into the shape the inspector expects.
+
+    mcp-clickhouse answers `run_query` with {"columns": [...], "rows": [[...]]};
+    the UI wants named rows, a row count and a latency, while the model must see
+    only the data.
+    """
+    if failed:
+        return json.dumps({"error": payload[:600], "raw_query": (args or {}).get("query", "")})
+
+    try:
+        data = json.loads(payload)
+    except Exception:
+        return json.dumps({"result": payload[:4000], "latency_ms": round(elapsed_ms, 2)})
+
+    out = {"latency_ms": round(elapsed_ms, 2)}
+    if isinstance(data, dict) and "columns" in data and "rows" in data:
+        cols, rows = data["columns"], data["rows"]
+        out.update({
+            "columns": cols,
+            "row_count": len(rows),
+            "data": [dict(zip(cols, r)) for r in rows[:MAX_ROWS]],
+            "raw_query": (args or {}).get("query", ""),
+        })
+    elif isinstance(data, list):
+        out.update({"row_count": len(data), "data": data[:MAX_ROWS]})
+    else:
+        out.update({"result": data})
+    return json.dumps(out, default=str)
+
+
 class CineComputeAgent:
     def __init__(self, model_name: str = None):
         self.client = genai.Client(api_key=settings.gemini_api_key)
         self.model_name = model_name or settings.gemini_model
-        self.dispatch = {
-            "list_tables": list_tables,
-            "describe_table": describe_table,
-            "run_query": run_query,
-        }
         self.system_instruction = SYSTEM_INSTRUCTION
         self.history = []
         self.last_error = None
@@ -185,12 +170,20 @@ class CineComputeAgent:
             )
 
     def _process_message(self, user_message: str, tool_callback=None):
+        """Open an MCP session for the turn and run the loop inside it."""
+        return run_async(self._turn(user_message, tool_callback))
+
+    async def _turn(self, user_message: str, tool_callback=None):
+        async with ClickHouseMCP() as mcp:
+            return await self._loop(mcp, user_message, tool_callback)
+
+    async def _loop(self, mcp, user_message: str, tool_callback=None):
         contents = self.history.copy()
         contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_message)]))
 
         config = types.GenerateContentConfig(
             system_instruction=self.system_instruction,
-            tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
+            tools=[types.Tool(function_declarations=mcp.declarations)],
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             temperature=0.2,
         )
@@ -212,14 +205,8 @@ class CineComputeAgent:
                 name = function_call.name
                 args = dict(function_call.args or {})
 
-                fn = self.dispatch.get(name)
-                if fn is None:
-                    result_str = json.dumps({"error": f"Unknown tool: {name}"})
-                else:
-                    try:
-                        result_str = fn(**args)
-                    except Exception as e:  # never break the loop on a tool error
-                        result_str = json.dumps({"error": f"{type(e).__name__}: {e}"})
+                payload, elapsed_ms, failed = await mcp.call(name, args)
+                result_str = _wrap_mcp_result(name, args, payload, elapsed_ms, failed)
 
                 if tool_callback:
                     tool_callback(name, args, result_str)

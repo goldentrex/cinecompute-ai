@@ -20,7 +20,7 @@ PHASES = {
 NODES = [
     ("Question", "the ask"),
     ("Gemini", "writes SQL"),
-    ("MCP bridge", "read-only guard"),
+    ("MCP server", "mcp-clickhouse"),
     ("ClickHouse", "250k events"),
     ("Analysis", "cause · cost · fix"),
 ]

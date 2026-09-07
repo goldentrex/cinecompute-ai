@@ -44,29 +44,47 @@ def check_clickhouse():
 
 
 def check_mcp_tools():
-    print("\nMCP bridge")
-    from app.agent.mcp_bridge import list_tables, run_query
+    """Exercise the official ClickHouse MCP server the same way the agent does."""
+    print("\nClickHouse MCP server (mcp-clickhouse)")
     import json
-    tables = json.loads(list_tables())
-    if "error" in tables:
-        print(f"{FAIL} list_tables: {tables['error'][:160]}")
-        return False
-    print(f"{OK} list_tables -> {tables['tables']}")
+    from app.agent.mcp_client import ClickHouseMCP, run_async, server_command
 
-    res = json.loads(run_query(
-        f"SELECT status, count() AS c FROM {settings.clickhouse_database}.vfx_render_events "
-        f"GROUP BY status ORDER BY c DESC"
-    ))
-    if "error" in res:
-        print(f"{FAIL} run_query: {res['error'][:160]}")
-        return False
-    print(f"{OK} run_query -> {res['row_count']} rows in {res['latency_ms']} ms")
+    print(f"         binary: {server_command()}")
 
-    blocked = json.loads(run_query("DROP TABLE cinecompute.vfx_render_events"))
-    if "error" in blocked:
-        print(f"{OK} write guard rejects DDL")
+    async def probe():
+        async with ClickHouseMCP() as mcp:
+            names = [t.name for t in mcp.tools]
+            listed, _, err_l = await mcp.call("list_tables",
+                                              {"database": settings.clickhouse_database})
+            rows, ms, err_q = await mcp.call("run_query", {
+                "query": f"SELECT status, count() AS c FROM {settings.clickhouse_database}"
+                         ".vfx_render_events GROUP BY status ORDER BY c DESC"})
+            blocked, _, err_b = await mcp.call("run_query", {
+                "query": f"DROP TABLE {settings.clickhouse_database}.vfx_render_events"})
+            return names, (listed, err_l), (rows, ms, err_q), (blocked, err_b)
+
+    try:
+        names, (listed, err_l), (rows, ms, err_q), (blocked, err_b) = run_async(probe())
+    except Exception as e:
+        print(f"{FAIL} could not start the MCP server: {type(e).__name__}: {str(e)[:180]}")
+        return False
+
+    print(f"{OK} session initialised, tools: {names}")
+    if err_l:
+        print(f"{FAIL} list_tables: {listed[:160]}")
+        return False
+    print(f"{OK} list_tables answered")
+
+    if err_q:
+        print(f"{FAIL} run_query: {rows[:160]}")
+        return False
+    n = len(json.loads(rows).get("rows", [])) if rows.startswith("{") else 0
+    print(f"{OK} run_query -> {n} rows in {ms:.1f} ms")
+
+    if err_b:
+        print(f"{OK} writes rejected: {blocked.split('.')[0][:70]}")
     else:
-        print(f"{FAIL} write guard did NOT reject a DROP statement")
+        print(f"{FAIL} a DROP was NOT rejected")
         return False
     return True
 
