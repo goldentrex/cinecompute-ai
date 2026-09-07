@@ -34,7 +34,7 @@ for key, default in (("messages", []), ("mcp_logs", []), ("live_calls", 0)):
         st.session_state[key] = default
 # A redeploy leaves already-open browser sessions holding an agent built by the
 # previous version of the code. Rebuild it when it predates the current class.
-if "agent" not in st.session_state or not hasattr(st.session_state.agent, "backend"):
+if "agent" not in st.session_state or not hasattr(st.session_state.agent, "setup_error"):
     st.session_state.agent = CineComputeAgent()
 
 PUBLIC_DEMO = os.environ.get("PUBLIC_DEMO", "").strip().lower() in ("1", "true", "yes")
@@ -191,6 +191,11 @@ st.markdown(
 )
 
 st.markdown('<div class="label">Ask the agent</div>', unsafe_allow_html=True)
+if getattr(st.session_state.agent, 'setup_error', None):
+    st.warning(
+        'Live questions are unavailable on this deployment - the recorded \n'
+        'analyses below still work and show the real SQL the agent wrote.'
+    )
 
 # --------------------------------------------------------------------------
 # Ask

@@ -78,18 +78,32 @@ class CineComputeAgent:
     def __init__(self, model_name: str = None):
         # Vertex AI when a Google Cloud project is configured (no per-model free
         # quota), otherwise the AI Studio endpoint with an API key.
+        # A misconfigured backend must never take the page down: the dashboard and
+        # the recorded runs need no model at all, so fall back rather than raise.
+        self.setup_error = None
+        self.client = None
+        self.backend = "unavailable"
+
         if settings.google_genai_use_vertexai and settings.google_cloud_project:
-            from app.agent.gcp_auth import ensure_credentials
-            ensure_credentials()
-            self.client = genai.Client(
-                vertexai=True,
-                project=settings.google_cloud_project,
-                location=settings.google_cloud_location,
-            )
-            self.backend = "vertex"
-        else:
-            self.client = genai.Client(api_key=settings.gemini_api_key)
-            self.backend = "ai-studio"
+            try:
+                from app.agent.gcp_auth import ensure_credentials
+                ensure_credentials()
+                self.client = genai.Client(
+                    vertexai=True,
+                    project=settings.google_cloud_project,
+                    location=settings.google_cloud_location,
+                )
+                self.backend = "vertex"
+            except Exception as e:
+                self.setup_error = f"Vertex AI unavailable ({type(e).__name__}: {str(e)[:200]})"
+
+        if self.client is None and settings.gemini_api_key:
+            try:
+                self.client = genai.Client(api_key=settings.gemini_api_key)
+                self.backend = "ai-studio"
+            except Exception as e:
+                self.setup_error = (self.setup_error or "") + \
+                    f" | AI Studio unavailable ({type(e).__name__})"
 
         self.model_name = model_name or settings.gemini_model
         # the configured default is an AI-Studio model id; Vertex exposes a
@@ -194,6 +208,15 @@ class CineComputeAgent:
                 self.replayed = True
                 self.model_name = recorded.get("model", self.model_name)
                 return recorded["answer"]
+
+        if self.client is None:
+            # replay above needs no model; a live question does
+            return (
+                "**The model backend is not configured on this deployment.**\n\n"
+                "The dashboard and the recorded analyses still work - use the "
+                "buttons above. Live questions need Gemini credentials.\n\n"
+                f"`{self.setup_error or 'no GEMINI_API_KEY and no Vertex project'}`"
+            )
 
         recorded_calls = []
 
