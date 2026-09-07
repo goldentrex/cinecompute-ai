@@ -31,9 +31,15 @@ def ensure_credentials() -> str | None:
     try:
         parsed = json.loads(raw)
     except ValueError as e:
+        hint = ""
+        if "control character" in str(e).lower():
+            # TOML basic triple quotes turn the \\n escapes inside the private
+            # key into real newlines, which JSON then rejects.
+            hint = (" The secret was probably quoted with basic triple quotes; "
+                    "use literal triple quotes instead.")
         raise RuntimeError(
             "GOOGLE_CREDENTIALS_JSON is not valid JSON - paste the whole service "
-            f"account key file, including the braces ({e})."
+            f"account key file, including the braces ({e})." + hint
         ) from e
 
     fd, path = tempfile.mkstemp(prefix="cinecompute-gcp-", suffix=".json")
