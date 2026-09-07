@@ -72,3 +72,32 @@ def test_recorded_answers_use_the_three_sections():
     for question, _, _ in cache.list_cached():
         answer = cache.load(question)["answer"]
         assert answer.startswith("### 1."), f"format drifted on: {question[:60]}"
+
+
+def test_every_preset_button_has_a_recording():
+    """A preset without a recording silently goes live: slow, and it costs quota.
+
+    This caught a real miss: rewording a preset changes the cache filename, and
+    .agent_cache is gitignored, so the new recording never reached the repo.
+    """
+    import ast
+    from pathlib import Path
+
+    app_src = Path(__file__).resolve().parents[1] / "app" / "ui" / "app.py"
+    tree = ast.parse(app_src.read_text(encoding="utf-8"))
+
+    questions = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        if "PRESETS" in names:
+            # [(button label, question sent to the agent), ...]
+            questions += [ast.literal_eval(e.elts[1]) for e in node.value.elts]
+        elif "LIVE_PROBE" in names:
+            continue  # deliberately never recorded: it must run live
+
+    assert questions, "could not read the preset questions from app.py"
+
+    missing = [q for q in questions if cache.load(q) is None]
+    assert not missing, f"presets with no recorded run: {[q[:60] for q in missing]}"
