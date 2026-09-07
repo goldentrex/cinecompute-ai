@@ -5,6 +5,9 @@ primaryColor = "#2563eb"
 backgroundColor = "#f7f8fa"
 secondaryBackgroundColor = "#ffffff"
 textColor = "#0f172a"
+# Streamlit's own base stylesheet outranks custom CSS for the font family, so the
+# webfont has to be declared here as well as imported in theme.py.
+font = "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif"
 
 [server]
 headless = true
