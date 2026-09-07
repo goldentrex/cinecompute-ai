@@ -1,8 +1,12 @@
-google-genai>=0.3.0
-clickhouse-connect>=0.7.0
-pydantic>=2.5.0
-pydantic-settings>=2.1.0
-streamlit>=1.35.0
-pandas>=2.2.0
-plotly>=5.22.0
-python-dotenv>=1.0.1
+# Upper bounds pinned to the major versions this app was actually tested against.
+# google-genai 2.x and pandas 3.x are major releases with breaking changes; an
+# unbounded install on a fresh host would pull them and can break the agent loop
+# or the dataframe rendering on first boot.
+google-genai>=1.47,<2
+clickhouse-connect>=0.15,<1
+pydantic>=2.5,<3
+pydantic-settings>=2.1,<3
+streamlit>=1.50,<2
+pandas>=2.2,<3
+plotly>=7.0,<8
+python-dotenv>=1.0.1,<2
