@@ -123,13 +123,32 @@ def dashboard():
     return load_dashboard()
 
 
+def skeleton_cards():
+    """Shown while the first ClickHouse round-trip is in flight (~1s from the US)."""
+    cell = ('<div class="card"><div class="metric-k skel" style="height:11px;width:45%"></div>'
+            '<div class="skel skel-v"></div><div class="skel skel-d"></div></div>')
+    return f'<div class="cards">{cell * 4}</div>'
+
+
+_boot = st.empty()
+if dashboard.clear is not None and "booted" not in st.session_state:
+    _boot.markdown(skeleton_cards(), unsafe_allow_html=True)
+
 kpis, frames, timing, db_error = dashboard()
+st.session_state.booted = True
+_boot.empty()
 
 # --------------------------------------------------------------------------
 # The one thing on screen
 # --------------------------------------------------------------------------
 if db_error:
-    st.error(f"Cannot reach ClickHouse, so there is nothing to report.\n\n`{db_error}`")
+    st.markdown(
+        '<div class="callout" role="alert" style="border-left-color:' + theme.LOSS + '">'
+        '<b>ClickHouse is unreachable</b>, so there is nothing to report yet. '
+        'Check the service is running and that this host is allowed to connect.'
+        '</div>', unsafe_allow_html=True)
+    with st.expander("Technical detail"):
+        st.code(db_error)
     st.stop()
 
 st.markdown(
@@ -196,8 +215,10 @@ _live = {"queries": 0, "ms": 0.0, "steps": []}
 
 
 def _paint(phase, label=""):
+    # aria-live so a screen reader announces each step as the loop advances
     wf_slot.markdown(
-        f'<div class="wfbox">{workflow.render(phase, _live["queries"], _live["ms"], label)}</div>',
+        f'<div class="wfbox" role="status" aria-live="polite">'
+        f'{workflow.render(phase, _live["queries"], _live["ms"], label)}</div>',
         unsafe_allow_html=True,
     )
 

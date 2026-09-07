@@ -11,14 +11,14 @@ SURFACE = "#ffffff"
 BORDER = "#e3e8ef"
 BORDER_STRONG = "#cdd5df"
 INK = "#0f172a"
-MUTED = "#64748b"
-FAINT = "#94a3b8"
+MUTED = "#63738a"   # darkened to clear WCAG AA on the page background
+FAINT = "#637895"   # AA-compliant; the old value was 2.56:1
 
 # semantic
 PRIMARY = "#2563eb"
 LOSS = "#dc2626"
-WARN = "#d97706"
-GAIN = "#059669"
+WARN = "#b16105"
+GAIN = "#05875f"
 VIOLET = "#7c3aed"
 
 STATUS_COLORS = {
@@ -178,6 +178,33 @@ CSS = f"""
     hr {{ border-color: {BORDER}; margin: 26px 0 18px 0; }}
     .foot {{ font-size: 12.5px; color: {FAINT}; margin-top: 8px; line-height: 1.7; }}
 
+    /* ---- focus, keyboard, touch targets ---- */
+    /* every interactive control gets the same visible focus ring, and only when
+       reached by keyboard - mouse users do not see it */
+    .stButton > button:focus-visible,
+    [data-testid="stExpander"] summary:focus-visible,
+    [data-testid="stChatInput"] textarea:focus-visible,
+    a:focus-visible {{
+        outline: 2px solid {PRIMARY};
+        outline-offset: 2px;
+        border-radius: 8px;
+    }}
+    .stButton > button:active {{ transform: translateY(1px); }}
+    /* WCAG 2.5.5: pointer targets stay at least 44px tall */
+    .stButton > button {{ min-height: 44px; }}
+    [data-testid="stExpander"] summary {{ min-height: 44px; display: flex; align-items: center; }}
+
+    /* ---- loading skeletons ---- */
+    .skel {{
+        background: linear-gradient(90deg, #eef1f5 25%, #f6f8fa 37%, #eef1f5 63%);
+        background-size: 400% 100%;
+        animation: shimmer 1.4s ease-in-out infinite;
+        border-radius: 6px;
+    }}
+    @keyframes shimmer {{ from {{ background-position: 100% 0; }} to {{ background-position: -100% 0; }} }}
+    .skel-v {{ height: 30px; width: 70%; margin-top: var(--s1); }}
+    .skel-d {{ height: 12px; width: 55%; margin-top: var(--s2); }}
+
     /* content settles in rather than popping */
     .cards, .callout, .wfbox, [data-testid="stChatMessage"] {{
         animation: rise .34s cubic-bezier(.16,.84,.44,1) both;
@@ -191,15 +218,25 @@ CSS = f"""
     }}
 
     @media (prefers-reduced-motion: reduce) {{
-        .cards, .callout, .wfbox, [data-testid="stChatMessage"] {{ animation: none; }}
+        .cards, .callout, .wfbox, [data-testid="stChatMessage"], .skel {{
+            animation: none;
+        }}
+        .stButton > button:active {{ transform: none; }}
     }}
     @media (max-width: 860px) {{
         .cards {{ grid-template-columns: repeat(2, 1fr); }}
         .block-container {{ padding-left: var(--s4); padding-right: var(--s4); }}
     }}
     @media (max-width: 560px) {{
-        .cards {{ grid-template-columns: 1fr; }}
-        .card.lead .metric-v {{ font-size: {SCALE["xl"]}px; }}
+        .cards {{ grid-template-columns: 1fr; gap: var(--s2); }}
+        .card.lead .metric-v {{ font-size: {SCALE["xl"]}px; letter-spacing: -1px; }}
+        .metric-v {{ font-size: {SCALE["lg"]}px; }}
+        .topbar {{ flex-direction: column; align-items: flex-start; gap: var(--s2); }}
+        .step {{ font-size: 12px; }}
+        /* the pipeline is wider than a phone: let it scroll rather than shrink
+           the labels into illegibility */
+        .wfbox {{ overflow-x: auto; }}
+        .wfbox svg {{ min-width: 720px; }}
     }}
 </style>
 """
