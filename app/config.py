@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     # Vertex AI on Google Cloud instead of the AI Studio endpoint.
     google_genai_use_vertexai: bool = False
     google_cloud_project: str = ""
-    google_cloud_location: str = "us-central1"
+    google_cloud_location: str = "global"   # regional endpoints do not serve Gemini 3
     # Streamlit Cloud has no filesystem to drop a key file on, so the service
     # account JSON can be passed whole as a secret and is materialised at startup.
     google_credentials_json: str = ""

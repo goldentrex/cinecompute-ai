@@ -48,7 +48,7 @@ def main():
         print(f"{FAIL} could not build the Vertex client: {type(e).__name__}: {str(e)[:220]}")
         return 1
 
-    print("\nModel availability in this region")
+    print("\nModel availability at this endpoint")
     usable = []
     for model in VERTEX_MODELS:
         try:
@@ -65,8 +65,9 @@ def main():
             print(f"         {model:<32} unavailable - {reason}")
 
     if not usable:
-        print(f"\n{FAIL} no model answered. Check that the Vertex AI API is enabled "
-              "and the service account has roles/aiplatform.user.")
+        print(f"\n{FAIL} no model answered. Check that the Vertex AI API is enabled and "
+              "the service account has roles/aiplatform.user. Note that Gemini 3 is served "
+              "only from GOOGLE_CLOUD_LOCATION=global, not from regional endpoints.")
         return 1
 
     print(f"\n{OK} {len(usable)} model(s) usable, best is {usable[0]}")

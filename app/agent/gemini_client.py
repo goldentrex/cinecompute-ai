@@ -22,13 +22,16 @@ MAX_TOOL_ROUNDS = 10
 # model returns 429 mid-demo we transparently continue on the next one.
 # Ordered best-first. Each entry has its OWN free-tier daily allowance, so a
 # long chain multiplies the number of demo runs available without billing.
-# Vertex and AI Studio expose different catalogues to this project: every 3.x
-# model returns 404 "no access" on Vertex, while 2.5-flash is retired on AI
-# Studio. Measured, not assumed - see scripts/check_vertex.py.
+# Gemini 3 is served by Vertex on the `global` endpoint, not by the regional
+# ones: us-central1, us-east5 and europe-west4 all return 404 for it while
+# global serves all nine. Measured - see scripts/check_vertex.py.
 VERTEX_MODELS = [
+    "gemini-3-flash-preview",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash",
     "gemini-2.5-flash",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash-lite",
+    "gemini-3.5-flash-lite",
 ]
 
 FALLBACK_MODELS = [
