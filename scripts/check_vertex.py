@@ -15,7 +15,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.config import settings                                  # noqa: E402
 from app.agent.gcp_auth import account_email, ensure_credentials  # noqa: E402
-from app.agent.gemini_client import FALLBACK_MODELS               # noqa: E402
+from app.agent.gemini_client import VERTEX_MODELS                 # noqa: E402
 
 OK, FAIL = "  [OK]  ", "  [FAIL]"
 
@@ -50,7 +50,7 @@ def main():
 
     print("\nModel availability in this region")
     usable = []
-    for model in FALLBACK_MODELS:
+    for model in VERTEX_MODELS:
         try:
             t = time.time()
             client.models.generate_content(model=model, contents="Reply with OK")

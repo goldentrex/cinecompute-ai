@@ -22,6 +22,15 @@ MAX_TOOL_ROUNDS = 10
 # model returns 429 mid-demo we transparently continue on the next one.
 # Ordered best-first. Each entry has its OWN free-tier daily allowance, so a
 # long chain multiplies the number of demo runs available without billing.
+# Vertex and AI Studio expose different catalogues to this project: every 3.x
+# model returns 404 "no access" on Vertex, while 2.5-flash is retired on AI
+# Studio. Measured, not assumed - see scripts/check_vertex.py.
+VERTEX_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash-lite",
+]
+
 FALLBACK_MODELS = [
     "gemini-3.8-flash",
     "gemini-3.7-flash",
@@ -81,7 +90,12 @@ class CineComputeAgent:
         else:
             self.client = genai.Client(api_key=settings.gemini_api_key)
             self.backend = "ai-studio"
+
         self.model_name = model_name or settings.gemini_model
+        # the configured default is an AI-Studio model id; Vertex exposes a
+        # different catalogue to this project, so fall back to one it serves
+        if self.backend == "vertex" and self.model_name not in VERTEX_MODELS:
+            self.model_name = VERTEX_MODELS[0]
         self.system_instruction = SYSTEM_INSTRUCTION
         self.history = []
         self.last_error = None
@@ -109,7 +123,8 @@ class CineComputeAgent:
         Vertex has no per-model free quota, so the memo only applies to AI Studio.
         The preferred model is always tried, even if marked, in case quota reset.
         """
-        ordered = [self.model_name] + [m for m in FALLBACK_MODELS if m != self.model_name]
+        pool = VERTEX_MODELS if self.backend == "vertex" else FALLBACK_MODELS
+        ordered = [self.model_name] + [m for m in pool if m != self.model_name]
         if self.backend != "ai-studio":
             return ordered
         dry = model_state.exhausted()

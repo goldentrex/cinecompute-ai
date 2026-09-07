@@ -199,7 +199,8 @@ PRESETS = [
     ("Why do renders fail\non SEQ_010?",
      "What is causing render failures in SEQ_010_SPACE_BATTLE and how much money did we lose?"),
     ("Which sequences are\nover budget?",
-     "Which sequences are currently exceeding their production budget limits?"),
+     "Which sequences are exceeding their production budget, what is driving the "
+     "overspend, and what should the pipeline change?"),
     ("Which GPUs waste\nthe most money?",
      "Compare GPU cost efficiency: A100 vs H100 vs L40S on Houdini Karma jobs."),
 ]
