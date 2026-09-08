@@ -25,7 +25,11 @@ MAX_TOOL_ROUNDS = 10
 # Gemini 3 is served by Vertex on the `global` endpoint, not by the regional
 # ones: us-central1, us-east5 and europe-west4 all return 404 for it while
 # global serves all nine. Measured - see scripts/check_vertex.py.
+# Pinned to 3.1 Pro while the demo video is recorded, so the model named on
+# screen is the model that actually answered. Move "gemini-3.8-flash" back to the
+# front to return to the faster, cheaper default - the cascade below is unchanged.
 VERTEX_MODELS = [
+    "gemini-3.1-pro-preview",
     "gemini-3-flash-preview",
     "gemini-3.8-flash",
     "gemini-3.7-flash",
@@ -109,9 +113,12 @@ class CineComputeAgent:
                     f" | AI Studio unavailable ({type(e).__name__})"
 
         self.model_name = model_name or settings.gemini_model
-        # the configured default is an AI-Studio model id; Vertex exposes a
-        # different catalogue to this project, so fall back to one it serves
-        if self.backend == "vertex" and self.model_name not in VERTEX_MODELS:
+        # On Vertex the cascade above is the preference order, and its head is the
+        # model the demo runs on. GEMINI_MODEL names an AI-Studio id, so letting it
+        # win here silently kept the old head after the list was re-ordered - the
+        # footer then named a model the video did not. An explicit model_name
+        # argument still overrides, which is what the scripts use.
+        if self.backend == "vertex" and model_name is None:
             self.model_name = VERTEX_MODELS[0]
         self.system_instruction = SYSTEM_INSTRUCTION
         self.history = []

@@ -169,10 +169,16 @@ def render_verification(verdicts, summary):
     confirmed, checked = summary["confirmed"], summary["checked"]
     contradicted = summary.get("contradicted", 0)
     colour = theme.GAIN if contradicted == 0 else theme.WARN
+    # a check the guard discarded is neither a confirmation nor a contradiction,
+    # so the banner has to account for it rather than leave a gap in the count
+    discarded = max(checked - confirmed - contradicted, 0)
     label = (f"{confirmed} of {checked} figures re-derived from the database"
              if contradicted == 0 else
              f"{confirmed} of {checked} figures re-derived · "
              f"{contradicted} flagged as not reproducible")
+    if discarded:
+        label += (f" · {discarded} check{'s' if discarded > 1 else ''} discarded, "
+                  f"the query measured a different quantity")
 
     st.markdown(
         f'<div class="verif" style="border-color:{colour}">'
@@ -197,9 +203,15 @@ def render_verification(verdicts, summary):
         for v in verdicts:
             mark = {"confirmed": "✓", "contradicted": "≠", "unchecked": "–"}[v["status"]]
             what = v.get("checking") or v["claim"]
-            money = "$" in (v.get("context") or "")
-            line = (f'`{mark}` **{what}** — analysis: {_num(v["expected"], money)} · '
-                    f're-derived: {_num(v["found"], money)}')
+            money = v.get("is_money", "$" in (v.get("context") or ""))
+            if v["status"] == "unchecked":
+                why = ("the query measured a different quantity"
+                       if v.get("unit_mismatch") else "the check query returned nothing")
+                line = (f'`{mark}` **{what}** — discarded, {why} '
+                        f'(analysis: {_num(v["expected"], money)})')
+            else:
+                line = (f'`{mark}` **{what}** — analysis: {_num(v["expected"], money)} · '
+                        f're-derived: {_num(v["found"], money)}')
             st.markdown(line)
             st.code(v["sql"], language="sql")
 

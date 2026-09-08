@@ -59,6 +59,9 @@ Rules:
 - Always fill a "checking" field naming what you recompute and the filters you
   applied, in a few words - e.g. "wasted spend, SEQ_010, all software". It is shown
   to the reader beside the verdict, so a check with no label is not usable.
+- Recompute the quantity the number itself denotes. "(target: 313,408 frames)" is a
+  frame count: recompute frames. A query summing cost_usd against it measures
+  something else entirely and its disagreement means nothing.
 - Check the figure the claim is ABOUT, not a neighbouring one. The context you are
   given may mention several numbers; your query must recompute the one named by the
   claim id, nothing else.
@@ -94,7 +97,8 @@ def extract_claims(answer: str):
                    if i != -1), default=len(answer)) + 1
         context = " ".join(answer[start:end].split())
         seen.add(raw)
-        claims.append({"id": len(claims), "value": value, "text": raw, "context": context})
+        claims.append({"id": len(claims), "value": value, "text": raw,
+                       "context": context, "is_money": match.group(0).startswith("$")})
         if len(claims) >= MAX_CLAIMS:
             break
     return claims
@@ -147,7 +151,15 @@ async def verify(answer, mcp, generate, db, question=""):
         payload, _, failed = await mcp.call("run_query", {"query": sql})
         found = None if failed else _scalar(payload)
 
-        if found is None:
+        # A check that measures a different unit is not evidence either way. The
+        # verifier once answered a frame count - "(target: 313,408 frames)" - with a
+        # query summing cost_usd, and reported the mismatch as a contradiction.
+        # Money claims carry a $; money queries read cost_usd. When those disagree
+        # the check is discarded, not counted against the analysis.
+        query_is_money = "cost_usd" in sql.lower()
+        unit_mismatch = found is not None and claim["is_money"] != query_is_money
+
+        if found is None or unit_mismatch:
             status = "unchecked"
         else:
             scale = max(abs(claim["value"]), 1.0)
@@ -157,6 +169,8 @@ async def verify(answer, mcp, generate, db, question=""):
         verdicts.append({
             "claim": claim["text"], "context": claim["context"],
             "checking": item.get("checking", ""),
+            "unit_mismatch": unit_mismatch,
+            "is_money": claim["is_money"],
             "expected": claim["value"], "found": found, "status": status, "sql": sql,
         })
 

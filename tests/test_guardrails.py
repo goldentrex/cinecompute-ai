@@ -63,3 +63,16 @@ def test_remediation_policy_never_invents_a_figure():
     # the headline must be the sum of the parts, not a separate claim
     assert abs(doc["recoverable_usd"]
                - round(sum(r["recovers_usd"] for r in doc["rules"]), 2)) < 0.01
+
+
+def test_claim_records_whether_it_is_money():
+    """The unit guard needs to know a dollar amount from a frame count."""
+    from app.agent.verifier import extract_claims
+
+    claims = extract_claims(
+        "Spend reached $120,461.22 for the sequence.\n"
+        "The sequence targets 313,408 frames in total."
+    )
+    by_text = {c["text"]: c["is_money"] for c in claims}
+    assert by_text["120,461.22"] is True
+    assert by_text["313,408"] is False
