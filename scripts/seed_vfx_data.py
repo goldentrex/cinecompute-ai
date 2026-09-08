@@ -15,7 +15,33 @@ TOTAL_ROWS = 250000
 EVENT_COLUMNS = [
     "event_time", "project_id", "sequence_id", "shot_id", "software", "gpu_model",
     "vram_peak_gb", "compute_duration_sec", "cost_usd", "status", "error_details",
+    "artist_id", "frames_rendered",
 ]
+
+# Artists and frame counts were added after the published figures were written
+# down. They are drawn from their OWN generator, never from the main stream, so
+# every pre-existing column keeps the exact value it had: same costs, same
+# statuses, same VRAM peaks, same $97,885 of waste. Inserting a single
+# random.random() into the main stream would silently move every number in the
+# README, the recorded answers and the audit.
+AUX_SEED = 1337
+ARTISTS = [f"artist_fx_{i:02d}" for i in range(1, 13)]
+# Anomaly 3: one artist's scenes account for most of the memory kills on DUNE_CH3.
+# Implemented as attribution over the failures the main stream already generated -
+# no failure is added, so no cost or count changes.
+OOM_HEAVY_ARTIST = "artist_fx_07"
+OOM_HEAVY_PROJECT = "DUNE_CH3"
+OOM_HEAVY_SHARE = 0.80
+
+# Frames delivered against frames ordered. Chosen so the forecast has something
+# to say: SEQ_010 has spent its whole budget for well under two thirds of the
+# work, SEQ_080 is nearly done. target_frames is derived from what was actually
+# rendered, so the ratio is exact rather than asserted.
+COMPLETION_FACTORS = {
+    "SEQ_010_SPACE_BATTLE": 0.58,
+    "SEQ_045_UNDERWATER": 0.71,
+    "SEQ_080_CITY_CHASE": 0.93,
+}
 
 SEQUENCES = ["SEQ_010_SPACE_BATTLE", "SEQ_045_UNDERWATER", "SEQ_080_CITY_CHASE"]
 
@@ -59,7 +85,9 @@ def setup_database_and_tables(client):
             compute_duration_sec UInt32,
             cost_usd Float32,
             status LowCardinality(String),
-            error_details String
+            error_details String,
+            artist_id LowCardinality(String),
+            frames_rendered UInt16
         ) ENGINE = MergeTree()
         ORDER BY (project_id, sequence_id, event_time)
     """)
@@ -68,10 +96,20 @@ def setup_database_and_tables(client):
         CREATE TABLE IF NOT EXISTS {DB}.production_budgets (
             sequence_id String,
             allocated_budget_usd Float64,
-            deadline Date
+            deadline Date,
+            target_frames UInt32
         ) ENGINE = MergeTree()
         ORDER BY sequence_id
     """)
+
+    # An existing deployment already has these tables without the V2 columns, and
+    # CREATE TABLE IF NOT EXISTS will not add them.
+    for table, column in (
+        ("vfx_render_events", "artist_id LowCardinality(String)"),
+        ("vfx_render_events", "frames_rendered UInt16"),
+        ("production_budgets", "target_frames UInt32"),
+    ):
+        client.command(f"ALTER TABLE {DB}.{table} ADD COLUMN IF NOT EXISTS {column}")
 
 
 def seed_data(client):
@@ -82,6 +120,7 @@ def seed_data(client):
     print(f"Generating {TOTAL_ROWS:,} render events... (this may take a moment)")
 
     random.seed(42)  # reproducible demo data
+    aux = random.Random(AUX_SEED)  # artists and frames only - see AUX_SEED above
 
     projects = ["DUNE_CH3", "AVATAR_DEEP", "CYBER_NEO"]
     softwares = ["Houdini_Karma", "Maya_Arnold", "Nuke_Comp", "Blender_Cycles"]
@@ -89,6 +128,7 @@ def seed_data(client):
     failure_statuses = ["OOM_KILLED", "TIMEOUT", "DRIVER_CRASH"]
 
     spend_by_sequence = {seq: 0.0 for seq in SEQUENCES}
+    frames_by_sequence = {seq: 0 for seq in SEQUENCES}
     start_time = datetime.now() - timedelta(days=30)
 
     for batch_i in range(TOTAL_ROWS // BATCH_SIZE):
@@ -137,27 +177,85 @@ def seed_data(client):
             cost = (duration / 3600.0) * random.uniform(1.5, 4.0)
             spend_by_sequence[sequence] += cost
 
+            # --- V2 fields, drawn from `aux` so the row above is untouched ---
+            if (status == "OOM_KILLED" and project == OOM_HEAVY_PROJECT
+                    and aux.random() < OOM_HEAVY_SHARE):
+                artist = OOM_HEAVY_ARTIST
+            else:
+                artist = aux.choice(ARTISTS)
+            # A task that failed delivered nothing - that is what makes waste waste.
+            frames = aux.randint(1, 6) if status == "SUCCESS" else 0
+            frames_by_sequence[sequence] += frames
+
             data.append([
                 event_time, project, sequence, shot_id, software, gpu,
                 vram_peak, int(duration), cost, status, error_details,
+                artist, frames,
             ])
 
         client.insert(f"{DB}.vfx_render_events", data, column_names=EVENT_COLUMNS)
         print(f"Inserted batch {batch_i + 1}/{TOTAL_ROWS // BATCH_SIZE}")
 
     print("Inserting production budgets (calibrated against actual spend)...")
+    # target_frames is derived from the frames actually delivered, so "58% complete"
+    # is an exact ratio of two stored numbers rather than a claim.
     budgets_data = [
-        [seq, round(spend_by_sequence[seq] * BUDGET_FACTORS[seq], 2), DEADLINES[seq]]
+        [seq, round(spend_by_sequence[seq] * BUDGET_FACTORS[seq], 2), DEADLINES[seq],
+         int(round(frames_by_sequence[seq] / COMPLETION_FACTORS[seq]))]
         for seq in SEQUENCES
     ]
-    for seq, budget, _ in budgets_data:
-        print(f"  {seq}: spend ${spend_by_sequence[seq]:,.2f} vs budget ${budget:,.2f}")
+    for seq, budget, _, target in budgets_data:
+        done = frames_by_sequence[seq]
+        print(f"  {seq}: spend ${spend_by_sequence[seq]:,.2f} vs budget ${budget:,.2f} · "
+              f"{done:,}/{target:,} frames ({100.0 * done / target:.1f}%)")
     client.insert(
         f"{DB}.production_budgets", budgets_data,
-        column_names=["sequence_id", "allocated_budget_usd", "deadline"],
+        column_names=["sequence_id", "allocated_budget_usd", "deadline", "target_frames"],
     )
 
     print("Data seeding complete!")
+
+
+# Every figure published in the README, in SUBMISSION.md and in the recorded
+# answers comes from these aggregates. They are asserted after every re-seed:
+# if a change to the generator moves the main random stream, the run fails here
+# instead of quietly invalidating the whole submission.
+INVARIANTS = {
+    "events": 250000,
+    "total_spend": 387998.4788,
+    "wasted": 97884.7044,
+    "oom_waste": 10079.1946,
+    "crash_waste": 55919.3307,
+    "successful": 210578,
+    "wasted_gpu_hours": 35507.9806,
+}
+
+
+def check_invariants(client):
+    row = client.query(f"""
+        SELECT count(), round(sum(cost_usd), 4),
+               round(sumIf(cost_usd, status != 'SUCCESS'), 4),
+               round(sumIf(cost_usd, project_id = 'DUNE_CH3'
+                    AND sequence_id = 'SEQ_010_SPACE_BATTLE'
+                    AND software = 'Houdini_Karma' AND status = 'OOM_KILLED'), 4),
+               round(sumIf(cost_usd, sequence_id = 'SEQ_045_UNDERWATER'
+                    AND gpu_model = 'NVIDIA_L40S' AND status = 'DRIVER_CRASH'), 4),
+               countIf(status = 'SUCCESS'),
+               round(sumIf(compute_duration_sec, status != 'SUCCESS') / 3600.0, 4)
+        FROM {DB}.vfx_render_events
+    """).result_rows[0]
+    got = dict(zip(INVARIANTS, row))
+    ok = True
+    print("\nPublished figures (must not move):")
+    for key, expected in INVARIANTS.items():
+        same = abs(float(got[key]) - float(expected)) < 0.01
+        ok = ok and same
+        print(f"  {key:<17} {got[key]:>14,.2f}  expected {expected:>14,.2f}  "
+              f"[{'OK' if same else 'CHANGED'}]")
+    if not ok:
+        print("\n  A published figure moved. Adding a draw to the main random "
+              "stream shifts every row after it - use the `aux` generator.")
+    return ok
 
 
 def verify(client):
@@ -191,10 +289,33 @@ def verify(client):
     ).result_rows[0][0]
     print(f"  {rate}%")
 
+    print("\nFrames delivered against frames ordered:")
+    for seq, done, target, pct in client.query(f"""
+        SELECT b.sequence_id, sum(e.frames_rendered) AS done, any(b.target_frames) AS target,
+               round(100.0 * sum(e.frames_rendered) / nullIf(any(b.target_frames), 0), 1)
+        FROM {DB}.vfx_render_events e
+        INNER JOIN {DB}.production_budgets b ON e.sequence_id = b.sequence_id
+        GROUP BY b.sequence_id ORDER BY b.sequence_id
+    """).result_rows:
+        print(f"  {seq:<22} {done:>8,} / {target:>8,} frames  {pct:>5}%")
+
+    print(f"\nShare of {OOM_HEAVY_PROJECT} memory kills owned by each artist (top 3):")
+    for artist, kills, share in client.query(f"""
+        SELECT artist_id, count() AS kills,
+               round(100.0 * count() / (SELECT count() FROM {DB}.vfx_render_events
+                   WHERE project_id = '{OOM_HEAVY_PROJECT}' AND status = 'OOM_KILLED'), 1)
+        FROM {DB}.vfx_render_events
+        WHERE project_id = '{OOM_HEAVY_PROJECT}' AND status = 'OOM_KILLED'
+        GROUP BY artist_id ORDER BY kills DESC LIMIT 3
+    """).result_rows:
+        print(f"  {artist:<16} {kills:>7,} kills  {share:>5}%")
+
+    invariants_ok = check_invariants(client)
+
     if events != TOTAL_ROWS:
         print(f"\nWARNING: expected {TOTAL_ROWS:,} events, found {events:,}")
         return False
-    return True
+    return invariants_ok
 
 
 if __name__ == "__main__":

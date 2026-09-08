@@ -2,7 +2,7 @@
   "question": "What is causing render failures in SEQ_010_SPACE_BATTLE and how much money did we lose?",
   "answer": "### 1. Root Cause Diagnosis\nThe primary cause of render failures in **SEQ_010_SPACE_BATTLE** is **VRAM exhaustion (OOM_KILLED)** within **Houdini_Karma** tasks. Telemetry indicates that geometry density has exceeded the physical limits of even our highest-tier hardware.\n\n*   **Primary Failure Point:** `Houdini_Karma` on `NVIDIA_H100` and `NVIDIA_A100_80GB` nodes.\n*   **Error Signature:** `FATAL: Out of memory (VRAM > 78 GB). Geometry too dense.`\n*   **VRAM Profile:** Failed jobs are averaging **78.97 GB** of VRAM usage, effectively hitting the 80 GB hardware ceiling.\n*   **Secondary Issues:** Minor instances of `DRIVER_CRASH` and `TIMEOUT` across `Maya_Arnold` and `Nuke_Comp`, but these are statistically insignificant compared to the Houdini memory wall.\n\n### 2. Financial & Schedule Impact\nThe sequence is currently in a severe budget overrun, with failures accounting for a significant portion of the excess spend.\n\n*   **Total Sequence Spend:** $120,461.22\n*   **Allocated Budget:** $74,685.96\n*   **Current Overrun:** **$45,775.26 (61.3% over budget)**\n*   **Wasted Spend (Failed Jobs):** **$20,968.97**\n*   **Failure Rate:** 13.5% (11,290 failed jobs out of 83,485 total).\n\nNearly **46% of the total budget overrun** is directly attributable to failed compute cycles that produced zero usable frames.\n\n### 3. Prescriptive Action Plan\nImmediate intervention is required to lower the memory footprint of the space battle assets:\n\n1.  **Geometry Optimization:** Implement aggressive **Frustum Culling** and **Distance-based Level of Detail (LOD)** for the capital ships and debris fields. The \"Geometry too dense\" error suggests the renderer is trying to load high-res meshes for objects that may only occupy a few pixels.\n2.  **Memory Management:** Enable **Houdini Karma's \"Dicing\" limits** and reduce the `max_subdivision_level` for background assets.\n3.  **Texture Streaming:** Ensure all textures are converted to `.rat` or `.tx` format with proper mip-mapping to allow the renderer to stream only the required resolution into VRAM.\n4.  **Pipeline Guardrail:** Implement a pre-render check script that calculates estimated VRAM usage based on scene bounds and proxy density. Block submissions to the farm that exceed 75 GB to prevent costly OOM failures.\n5.  **Instance Heavy Assets:** Convert unique debris geometry into **Point Instancers** to leverage hardware instancing and reduce the unique memory footprint.",
   "model": "gemini-3-flash-preview",
-  "recorded_at": "2026-09-08 03:55:30",
+  "recorded_at": "2026-09-08 12:31:03",
   "tool_calls": [
     {
       "name": "run_query",
@@ -23,7 +23,7 @@
     {
       "claim": "120,461.22",
       "context": "* **Total Sequence Spend:** $120,461.22",
-      "checking": "total spend for SEQ_010_SPACE_BATTLE",
+      "checking": "Total sequence spend, SEQ_010_SPACE_BATTLE, all events",
       "expected": 120461.22,
       "found": 120461.22387089254,
       "status": "confirmed",
@@ -32,43 +32,25 @@
     {
       "claim": "74,685.96",
       "context": "* **Allocated Budget:** $74,685.96",
-      "checking": "allocated budget for SEQ_010_SPACE_BATTLE",
+      "checking": "Allocated budget, SEQ_010_SPACE_BATTLE",
       "expected": 74685.96,
       "found": 74685.96,
       "status": "confirmed",
-      "sql": "SELECT sum(allocated_budget_usd) FROM cinecompute.production_budgets WHERE sequence_id = 'SEQ_010_SPACE_BATTLE'"
+      "sql": "SELECT allocated_budget_usd FROM cinecompute.production_budgets WHERE sequence_id = 'SEQ_010_SPACE_BATTLE'"
     },
     {
       "claim": "20,968.97",
       "context": "* **Wasted Spend (Failed Jobs):** **$20,968.97**",
-      "checking": "wasted spend on failed jobs for SEQ_010_SPACE_BATTLE",
+      "checking": "Wasted spend, SEQ_010_SPACE_BATTLE, failed jobs",
       "expected": 20968.97,
       "found": 20968.96872944804,
       "status": "confirmed",
-      "sql": "SELECT sumIf(cost_usd, status != 'SUCCESS') FROM cinecompute.vfx_render_events WHERE sequence_id = 'SEQ_010_SPACE_BATTLE'"
-    },
-    {
-      "claim": "11,290",
-      "context": "5% (11,290 failed jobs out of 83,485 total).",
-      "checking": "number of failed jobs for SEQ_010_SPACE_BATTLE",
-      "expected": 11290.0,
-      "found": 11290.0,
-      "status": "confirmed",
-      "sql": "SELECT countIf(status != 'SUCCESS') FROM cinecompute.vfx_render_events WHERE sequence_id = 'SEQ_010_SPACE_BATTLE'"
-    },
-    {
-      "claim": "83,485",
-      "context": "5% (11,290 failed jobs out of 83,485 total).",
-      "checking": "total number of render jobs for SEQ_010_SPACE_BATTLE",
-      "expected": 83485.0,
-      "found": 83485.0,
-      "status": "confirmed",
-      "sql": "SELECT count() FROM cinecompute.vfx_render_events WHERE sequence_id = 'SEQ_010_SPACE_BATTLE'"
+      "sql": "SELECT sum(cost_usd) FROM cinecompute.vfx_render_events WHERE sequence_id = 'SEQ_010_SPACE_BATTLE' AND status != 'SUCCESS'"
     }
   ],
   "verification": {
-    "checked": 5,
-    "confirmed": 5,
+    "checked": 3,
+    "confirmed": 3,
     "contradicted": 0
   }
 }

@@ -49,17 +49,59 @@ LIVE_QUESTION_BUDGET = int(os.environ.get("LIVE_QUESTION_BUDGET", "3"))
 # --------------------------------------------------------------------------
 # Rendering helpers
 # --------------------------------------------------------------------------
+# Models reach for LaTeX when they show arithmetic, whatever the prompt says. A
+# `$$\frac{a}{b}$$` block renders as literal backslashes once dollars are escaped,
+# so it is rewritten as plain text before anything else touches the answer.
+_MATH_BLOCK = re.compile(r"\$\$(.+?)\$\$|\\\[(.+?)\\\]", re.DOTALL)
+
+
+def _plain_math(match: "re.Match") -> str:
+    body = match.group(1) or match.group(2) or ""
+    body = re.sub(r"\\text\{([^{}]*)\}", r"\1", body)
+    body = re.sub(r"\\frac\{([^{}]*)\}\{([^{}]*)\}", r"\1 / \2", body)
+    body = body.replace(r"\times", "x").replace(r"\cdot", "x")
+    body = body.replace(r"\%", "%").replace(r"\$", "$")
+    body = re.sub(r"\\[a-zA-Z]+", "", body)          # any remaining command
+    body = body.replace("{", "").replace("}", "")
+    return " ".join(body.split())
+
+
+# The same habit also shows up outside a math block, mid-sentence:
+# `= \mathbf{+\$133,005.76}` renders as visible backslashes.
+_TEX_WRAP = re.compile(r"\\(?:mathbf|mathrm|mathit|text|textbf|bf|it|emph)\{([^{}]*)\}")
+_TEX_OPS = ((r"\times", "x"), (r"\cdot", "x"), (r"\approx", "~"),
+            (r"\le", "<="), (r"\ge", ">="), (r"\%", "%"), (r"\$", "$"))
+
+
+def strip_math(text: str) -> str:
+    """Turn LaTeX arithmetic into the plain line a production manager can read."""
+    text = _MATH_BLOCK.sub(_plain_math, text)
+    for _ in range(3):                      # commands nest: \mathbf{\text{x}}
+        text, n = _TEX_WRAP.subn(r"\1", text)
+        if not n:
+            break
+    for tex, plain in _TEX_OPS:
+        text = text.replace(tex, plain)
+    # inline math was delimited by single dollars, which now sit next to the
+    # dollar amounts they wrapped: "$$207,691.72 ... = +$133,005.76$"
+    text = re.sub(r"\$\$+", "$", text)
+    text = re.sub(r"(\d)\s*\$(?!\d)", r"\1", text)
+    return text
+
+
 def money_safe(text: str) -> str:
     r"""Escape `$` outside code spans: Streamlit reads `$...$` as LaTeX."""
     parts = re.split(r"(```.*?```|`[^`]*`)", text, flags=re.DOTALL)
     return "".join(p if p.startswith("`") else p.replace("$", r"\$") for p in parts)
 
 
-SECTION_STYLE = [("cause", "Why it happens"), ("money", "What it costs"), ("fix", "What to do")]
+SECTION_STYLE = [("cause", "Why it happens"), ("money", "What it costs"),
+                 ("fix", "What to do"), ("note", "Draft note to the artist")]
 
 
 def render_answer(text: str):
     """Three labelled blocks rather than one wall of prose."""
+    text = strip_math(text)
     parts = re.split(r"^###\s*\d\.\s*(.+?)\s*$", text, flags=re.MULTILINE)
     if len(parts) < 3:
         st.markdown(money_safe(text))
@@ -266,9 +308,11 @@ st.markdown(
     f'<div class="card"><div class="metric-k">Failure rate</div>'
     f'<div class="metric-v">{kpis["failure_rate"]:.1f}%</div>'
     f'<div class="metric-d">{kpis["wasted_gpu_hours"]:,.0f} GPU-hours lost</div></div>'
-    f'<div class="card"><div class="metric-k">Total spend</div>'
-    f'<div class="metric-v">${kpis["total_spend"]:,.0f}</div>'
-    f'<div class="metric-d">{kpis["events"]:,} render jobs</div></div>'
+    # Total spend is history and says nothing about the landing point; the
+    # forecast does, and it is the figure a production wants at 07:00.
+    f'<div class="card"><div class="metric-k">Forecast at completion</div>'
+    f'<div class="metric-v" style="color:{theme.WARN}">${kpis["forecast_total"]:,.0f}</div>'
+    f'<div class="metric-d">{kpis["completion_pct"]:.0f}% of frames delivered</div></div>'
     f'</div>',
     unsafe_allow_html=True,
 )
@@ -282,9 +326,13 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-sched = frames["schedule"]
+sched = frames["schedule"].merge(
+    frames["progress"][["sequence_id", "completion_pct", "forecast_usd",
+                        "forecast_overrun", "cost_per_frame"]],
+    on="sequence_id", how="left")
 _worst = sched.sort_values("days_of_budget_left").iloc[0]
 _in_trouble = int((sched["verdict"] != "ok").sum())
+_forecast_worst = sched.sort_values("forecast_overrun", ascending=False).iloc[0]
 
 st.markdown('<div class="label">Schedule risk</div>', unsafe_allow_html=True)
 _rows = []
@@ -296,7 +344,7 @@ for _, r in sched.iterrows():
         f'<div class="srow">'
         f'<span class="sseq">{r["sequence_id"]}</span>'
         f'<span class="sbar" style="background:{colour}"></span>'
-        f'<span class="sfact">{left}</span>'
+        f'<span class="sfact">{left} · {r["completion_pct"]:.0f}% of frames done</span>'
         f'<span class="sdead">{r["days_to_deadline"]} days to {r["deadline"]:%d %b}</span>'
         f'</div>'
     )
@@ -304,10 +352,50 @@ st.markdown(
     f'<div class="card">{"".join(_rows)}'
     f'<div class="snote">Burn is the average over the observed window '
     f'(${_worst["burn_per_day"]:,.0f}/day for {_worst["sequence_id"]}). '
-    f'Days of budget left compares that burn to what is unspent - it does not '
-    f'assume how much work remains.</div></div>',
+    f'Days of budget left compares that burn to what is unspent. Completion is '
+    f'frames delivered against frames ordered, so the money and the work are '
+    f'measured separately: {_forecast_worst["sequence_id"]} has spent '
+    f'${_forecast_worst["spend_usd"]:,.0f} of a ${_forecast_worst["budget_usd"]:,.0f} '
+    f'budget for {_forecast_worst["completion_pct"]:.0f}% of its frames, so at '
+    f'${_forecast_worst["cost_per_frame"]:.2f} per delivered frame it lands near '
+    f'<b>${_forecast_worst["forecast_usd"]:,.0f}</b> - '
+    f'${_forecast_worst["forecast_overrun"]:,.0f} over. That holds only if the cost '
+    f'per frame does not change; fixing the two faults above is what changes it.'
+    f'</div></div>',
     unsafe_allow_html=True,
 )
+
+# --------------------------------------------------------------------------
+# Waste with a name on it
+# --------------------------------------------------------------------------
+_artists = frames["artists"]
+if len(_artists):
+    st.markdown('<div class="label">Where the waste comes from</div>',
+                unsafe_allow_html=True)
+    _farm_rate = kpis["failure_rate"]
+    _arows = []
+    for _, r in _artists.head(3).iterrows():
+        _off = r["failure_rate"] / _farm_rate if _farm_rate else 1.0
+        _colour = theme.LOSS if _off >= 1.5 else theme.MUTED
+        _arows.append(
+            f'<div class="srow">'
+            f'<span class="sseq">{r["artist_id"]}</span>'
+            f'<span class="sbar" style="background:{_colour}"></span>'
+            f'<span class="sfact">${r["wasted_usd"]:,.0f} wasted · '
+            f'{r["failure_rate"]:.1f}% of {r["jobs"]:,} jobs failed</span>'
+            f'<span class="sdead">{_off:.1f}x the farm rate</span>'
+            f'</div>'
+        )
+    st.markdown(
+        f'<div class="card">{"".join(_arows)}'
+        f'<div class="snote">Ranked by money, with the rate that justifies the '
+        f'ranking: a busy artist fails more often simply by submitting more, so a '
+        f'raw count would accuse the wrong person. The farm average is '
+        f'{_farm_rate:.1f}%. This points at a scene habit that can be fixed - '
+        f'dense geometry, no proxy meshes - not at a performance problem. Artist '
+        f'identifiers are synthetic, like the rest of this telemetry.</div></div>',
+        unsafe_allow_html=True,
+    )
 
 st.markdown('<div class="label">Ask the agent</div>', unsafe_allow_html=True)
 if getattr(st.session_state.agent, 'setup_error', None):
@@ -325,9 +413,10 @@ if getattr(st.session_state.agent, 'setup_error', None):
 PRESETS = [
     ("Why do renders fail\non SEQ_010?",
      "What is causing render failures in SEQ_010_SPACE_BATTLE and how much money did we lose?"),
-    ("Which sequences are\nover budget?",
-     "Which sequences are exceeding their production budget, what is driving the "
-     "overspend, and what should the pipeline change?"),
+    ("Forecast SEQ_010 and\nname the crash source",
+     "Forecast the final cost of SEQ_010_SPACE_BATTLE from its cost per delivered "
+     "frame, compare it to the allocated budget, and identify whether one artist is "
+     "behind an abnormal share of its failures."),
     ("Which GPUs waste\nthe most money?",
      "Compare GPU cost efficiency: A100 vs H100 vs L40S on Houdini Karma jobs."),
 ]
@@ -550,6 +639,43 @@ with st.expander("Show the numbers behind this"):
                    "Productive", theme.MUTED, dy=-14)
     st.plotly_chart(theme.plotly_layout(fig, 260, "Daily spend"),
                     width="stretch", config={"displayModeBar": False})
+
+    # Spend against work delivered, and the same line continued at the current
+    # cost per frame. The x-axis is completion, not time: the arithmetic supports
+    # "what the remaining frames cost", not "when they land".
+    pf = frames["progress"]
+    _budget_total = float(pf["budget_usd"].sum())
+    _pct = (100.0 * bd["cum_frames"] / max(kpis["frames_target"], 1)).round(2)
+    fig = go.Figure()
+    _spent_now = float(bd["cum_spend"].iloc[-1])
+    fig.add_scatter(
+        x=[kpis["completion_pct"], 100], y=[_spent_now, kpis["forecast_total"]],
+        name="Projected", mode="lines",
+        line=dict(color=theme.WARN, width=2.4, dash="dash"),
+        hovertemplate="%{y:$,.0f} at %{x:.0f}% complete<extra></extra>",
+    )
+    fig.add_scatter(
+        x=_pct, y=bd["cum_spend"], name="Spent", mode="lines",
+        line=dict(color=theme.INK, width=2.6, shape="spline", smoothing=1.0),
+        hovertemplate="%{y:$,.0f} at %{x:.0f}% complete<extra></extra>",
+    )
+    fig.add_hline(y=_budget_total, line=dict(color=theme.MUTED, width=1.4, dash="dot"))
+    theme.annotate(fig, 100, kpis["forecast_total"],
+                   f'${kpis["forecast_total"]:,.0f}', theme.WARN, dy=-14)
+    theme.annotate(fig, 12, _budget_total,
+                   f'budget ${_budget_total:,.0f}', theme.MUTED, dy=-14)
+    fig.update_xaxes(ticksuffix="%", range=[0, 108])
+    st.plotly_chart(
+        theme.plotly_layout(fig, 280, "Spend against frames delivered, continued to completion"),
+        width="stretch", config={"displayModeBar": False})
+    st.caption(
+        f'{kpis["frames_done"]:,} of {kpis["frames_target"]:,} frames delivered for '
+        f'${_spent_now:,.0f}. At the same cost per delivered frame the '
+        f'remaining {kpis["frames_target"] - kpis["frames_done"]:,} frames cost '
+        f'${kpis["forecast_total"] - _spent_now:,.0f} more, landing '
+        f'${kpis["forecast_overrun"]:,.0f} over the combined budget. The dashed line is '
+        f'that arithmetic, not a schedule prediction.'.replace("$", r"\$")
+    )
 
     b = frames["budget"]
     fig = go.Figure()

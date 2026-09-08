@@ -2,7 +2,7 @@
   "question": "Compare GPU cost efficiency: A100 vs H100 vs L40S on Houdini Karma jobs.",
   "answer": "### 1. Root Cause Analysis (Technical)\nThe efficiency comparison for **Houdini_Karma** jobs reveals a critical stability disparity between GPU models. While the **NVIDIA_L40S** offers the lowest cost per successful job ($1.3750), it suffers from a severe **29.28% failure rate**, primarily driven by **3,597 DRIVER_CRASH** events. \n\nIn contrast, the **NVIDIA_RTX4090** is the most reliable platform with an **89.8% success rate** and a competitive cost of $1.3782 per successful job, though it is limited to lighter tasks (average VRAM usage of 13.11 GB). The high-tier **H100** and **A100_80GB** units are currently being bottlenecked by memory limits, with **4,383 combined OOM_KILLED events** as jobs frequently hit the 80 GB VRAM ceiling (averaging 78.89 GB on failed tasks).\n\n### 2. Financial & Schedule Impact\nTotal compute spend for Houdini Karma is **$101,416.40**, of which **$31,680.18 (31.24%) is wasted** on failed renders. \n*   **L40S Instability:** Responsible for **$15,658.29** in wasted spend due to driver crashes.\n*   **High-End OOMs:** A100 and H100 failures account for **$13,986.04** in waste.\n*   **Efficiency Delta:** While the L40S is $0.0126 cheaper per job than the A100, its instability makes it the most expensive option in practice when accounting for the 1-in-3 failure rate.\n\n### 3. Prescriptive Action Plan\n*   **Immediate Driver Patch:** The L40S fleet requires an immediate rollback or update to a certified stable production driver to address the 3,597 crashes.\n*   **VRAM-Aware Scheduling:** Implement a scheduler constraint to prevent jobs with predicted VRAM requirements > 40 GB from landing on L40S nodes (48 GB capacity), as these are currently contributing to OOMs and potential driver instability.\n*   **Karma Memory Optimization:** For sequences running on A100/H100 nodes, reduce **Dicing Quality** and enable **Texture Caching** to lower the 78.89 GB peak VRAM usage and mitigate the 13% OOM rate.\n*   **Tiered Routing:** Route all light-weight look-dev and lighting tasks (< 20 GB) exclusively to **RTX4090** nodes to maximize the 89.8% success rate and preserve 80 GB nodes for heavy FX sims.",
   "model": "gemini-3-flash-preview",
-  "recorded_at": "2026-09-08 03:55:17",
+  "recorded_at": "2026-09-08 12:30:58",
   "tool_calls": [
     {
       "name": "run_query",
@@ -58,7 +58,7 @@
     {
       "claim": "3,597",
       "context": "28% failure rate**, primarily driven by **3,597 DRIVER_CRASH** events.",
-      "checking": "L40S driver crash count on Houdini Karma",
+      "checking": "L40S driver crash count, Houdini Karma",
       "expected": 3597.0,
       "found": 3597.0,
       "status": "confirmed",
@@ -67,16 +67,16 @@
     {
       "claim": "4,383",
       "context": "The high-tier **H100** and **A100_80GB** units are currently being bottlenecked by memory limits, with **4,383 combined OOM_KILLED events** as jobs frequently hit the 80 GB VRAM ceiling (averaging 78.",
-      "checking": "combined OOM count for H100 and A100 on Houdini Karma",
+      "checking": "combined OOM_KILLED events for A100 and H100, Houdini Karma",
       "expected": 4383.0,
       "found": 4383.0,
       "status": "confirmed",
-      "sql": "SELECT count() FROM cinecompute.vfx_render_events WHERE software = 'Houdini_Karma' AND gpu_model IN ('NVIDIA_H100', 'NVIDIA_A100_80GB') AND status = 'OOM_KILLED'"
+      "sql": "SELECT count() FROM cinecompute.vfx_render_events WHERE software = 'Houdini_Karma' AND gpu_model IN ('NVIDIA_A100_80GB', 'NVIDIA_H100') AND status = 'OOM_KILLED'"
     },
     {
       "claim": "101,416.40",
       "context": "Total compute spend for Houdini Karma is **$101,416.40**, of which **$31,680.",
-      "checking": "total compute spend for Houdini Karma",
+      "checking": "total compute spend, Houdini Karma",
       "expected": 101416.4,
       "found": 101416.40326390602,
       "status": "confirmed",
@@ -85,7 +85,7 @@
     {
       "claim": "31,680.18",
       "context": "40**, of which **$31,680.18 (31.",
-      "checking": "total wasted spend on Houdini Karma",
+      "checking": "wasted spend, Houdini Karma",
       "expected": 31680.18,
       "found": 31680.18216078449,
       "status": "confirmed",
@@ -94,16 +94,16 @@
     {
       "claim": "15,658.29",
       "context": "* **L40S Instability:** Responsible for **$15,658.29** in wasted spend due to driver crashes.",
-      "checking": "L40S wasted spend from driver crashes on Houdini Karma",
+      "checking": "wasted spend due to driver crashes, L40S, Houdini Karma",
       "expected": 15658.29,
       "found": 14590.643636981025,
       "status": "contradicted",
-      "sql": "SELECT sum(cost_usd) FROM cinecompute.vfx_render_events WHERE software = 'Houdini_Karma' AND gpu_model = 'NVIDIA_L40S' AND status = 'DRIVER_CRASH'"
+      "sql": "SELECT sumIf(cost_usd, status = 'DRIVER_CRASH') FROM cinecompute.vfx_render_events WHERE software = 'Houdini_Karma' AND gpu_model = 'NVIDIA_L40S'"
     },
     {
       "claim": "13,986.04",
       "context": "* **High-End OOMs:** A100 and H100 failures account for **$13,986.04** in waste.",
-      "checking": "A100 and H100 wasted spend on Houdini Karma",
+      "checking": "wasted spend for A100 and H100, Houdini Karma",
       "expected": 13986.04,
       "found": 13986.0395889231,
       "status": "confirmed",

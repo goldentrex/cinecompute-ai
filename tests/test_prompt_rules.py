@@ -25,3 +25,26 @@ def test_forbids_latex():
 def test_describes_the_real_mcp_tools():
     for tool in ("list_databases()", "list_tables(database)", "run_query(query)"):
         assert tool in P
+
+
+def test_latex_arithmetic_is_rewritten_as_plain_text():
+    """A model that answers in LaTeX must not reach the page as backslashes.
+
+    The system prompt forbids it and a model still produced
+    `$$\\text{Cost} = \\frac{...}{...}$$` on a live run, which renders as literal
+    escaped dollars once money_safe has run.
+    """
+    from app.ui.app import strip_math
+
+    out = strip_math(
+        r"$$\text{Cost / Frame} = \frac{\$120,461.22}{252,586} = \$0.4769$$"
+    )
+    assert "\\" not in out and "$$" not in out
+    assert "$120,461.22 / 252,586" in out
+    assert "$0.4769" in out
+
+
+def test_prompt_forbids_latex_arithmetic():
+    from app.agent.prompts import SYSTEM_INSTRUCTION
+
+    assert "\\frac" in SYSTEM_INSTRUCTION and "$$ ... $$" in SYSTEM_INSTRUCTION

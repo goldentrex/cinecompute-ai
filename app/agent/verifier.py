@@ -30,8 +30,13 @@ Schema - use these exact names, invent nothing:
   software (Houdini_Karma | Maya_Arnold | Nuke_Comp | Blender_Cycles),
   gpu_model (NVIDIA_A100_80GB | NVIDIA_H100 | NVIDIA_L40S | NVIDIA_RTX4090),
   vram_peak_gb (Float32), compute_duration_sec (UInt32), cost_usd (Float32),
-  status (SUCCESS | OOM_KILLED | TIMEOUT | DRIVER_CRASH), error_details (String)
-- {db}.production_budgets: sequence_id, allocated_budget_usd (Float64), deadline (Date)
+  status (SUCCESS | OOM_KILLED | TIMEOUT | DRIVER_CRASH), error_details (String),
+  artist_id (String), frames_rendered (UInt16, 0 unless status = 'SUCCESS')
+- {db}.production_budgets: sequence_id, allocated_budget_usd (Float64), deadline (Date),
+  target_frames (UInt32)
+
+Cost per delivered frame is sum(cost_usd) / nullIf(sum(frames_rendered), 0) - all
+spend over delivered frames. A forecast at completion is target_frames times that.
 
 A failed task is `status != 'SUCCESS'`; there is no 'FAILED' status. Wasted spend is
 `sumIf(cost_usd, status != 'SUCCESS')`; total spend is `sum(cost_usd)`.
@@ -42,10 +47,18 @@ Rules:
 - Each query MUST return exactly one row and one column: the number itself.
 - Fully qualify tables as {db}.vfx_render_events / {db}.production_budgets.
 - Recompute from the base table. Never copy a number from the analysis into the query.
-- The user's question sets the scope for the whole analysis. If it asks about
-  Houdini Karma, every claim is about Houdini Karma unless the sentence says
-  otherwise: carry that filter into your query.
-- Echo what you are recomputing in a "checking" field, in a few words.
+- Scope comes from exactly two places: the user's question, and the claim's own
+  sentence. If the question asks about Houdini Karma, carry that filter into every
+  query unless the sentence says otherwise.
+- NEVER import a filter that appears elsewhere in the analysis. A section above may
+  discuss one renderer, one GPU or one artist; that does not narrow a later sentence.
+  "Current spend: $X" for a sequence means the whole sequence - adding
+  `AND software = '...'` because an earlier paragraph mentioned it measures a
+  different quantity and produces a false accusation. When a sentence gives a total
+  for a sequence, filter on the sequence and nothing else.
+- Always fill a "checking" field naming what you recompute and the filters you
+  applied, in a few words - e.g. "wasted spend, SEQ_010, all software". It is shown
+  to the reader beside the verdict, so a check with no label is not usable.
 - Check the figure the claim is ABOUT, not a neighbouring one. The context you are
   given may mention several numbers; your query must recompute the one named by the
   claim id, nothing else.

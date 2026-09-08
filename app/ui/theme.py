@@ -186,6 +186,7 @@ CSS = f"""
     .sec-head.cause {{ color: {PRIMARY}; }}
     .sec-head.money {{ color: {LOSS}; }}
     .sec-head.fix   {{ color: {GAIN}; }}
+    .sec-head.note  {{ color: {VIOLET}; }}
 
     [data-testid="stChatMessage"] {{ background: transparent; padding: 0; }}
     [data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li {{

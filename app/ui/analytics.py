@@ -107,16 +107,61 @@ def load_dashboard():
             FROM {DB}.vfx_render_events
         """).result_rows[0]
 
+        # V2: frames delivered against frames ordered. A sequence can be on budget
+        # and still be heading for an overrun - what settles it is the cost of the
+        # work still to do, which needs a completion ratio, not a spend total.
+        progress = timer.df(client, f"""
+            SELECT
+                b.sequence_id                                                  AS sequence_id,
+                sum(e.frames_rendered)                                         AS frames_done,
+                any(b.target_frames)                                           AS target_frames,
+                round(100.0 * sum(e.frames_rendered)
+                      / nullIf(any(b.target_frames), 0), 1)                    AS completion_pct,
+                round(sum(e.cost_usd), 2)                                      AS spend_usd,
+                round(any(b.allocated_budget_usd), 2)                          AS budget_usd,
+                round(sum(e.cost_usd) / nullIf(sum(e.frames_rendered), 0), 4)  AS cost_per_frame,
+                round(any(b.target_frames) * sum(e.cost_usd)
+                      / nullIf(sum(e.frames_rendered), 0), 2)                  AS forecast_usd
+            FROM {DB}.vfx_render_events e
+            INNER JOIN {DB}.production_budgets b ON e.sequence_id = b.sequence_id
+            GROUP BY b.sequence_id
+            ORDER BY b.sequence_id
+        """)
+        progress["forecast_overrun"] = (
+            progress["forecast_usd"] - progress["budget_usd"]).round(2)
+
+        # V2: waste carries a name. Ranked by money, with the failure rate that
+        # justifies the ranking, so it is a diagnosis and not an accusation.
+        artists = timer.df(client, f"""
+            SELECT
+                artist_id                                                          AS artist_id,
+                round(sumIf(cost_usd, status != 'SUCCESS'), 2)                     AS wasted_usd,
+                count()                                                            AS jobs,
+                countIf(status != 'SUCCESS')                                       AS failed_jobs,
+                round(100.0 * countIf(status != 'SUCCESS') / nullIf(count(), 0), 1) AS failure_rate,
+                countIf(status = 'OOM_KILLED')                                     AS oom_kills
+            FROM {DB}.vfx_render_events
+            GROUP BY artist_id
+            ORDER BY wasted_usd DESC
+            LIMIT 5
+        """)
+
         burn = timer.df(client, f"""
             SELECT
                 toDate(event_time)                            AS day,
                 round(sumIf(cost_usd, status = 'SUCCESS'), 2)  AS productive_usd,
                 round(sumIf(cost_usd, status != 'SUCCESS'), 2) AS wasted_usd,
+                sum(frames_rendered)                          AS frames,
                 round(100.0 * countIf(status != 'SUCCESS') / nullIf(count(), 0), 2) AS failure_pct
             FROM {DB}.vfx_render_events
             GROUP BY day
             ORDER BY day
         """)
+
+        # cumulative spend against cumulative frames: the two series the forecast
+        # curve is drawn from, so the projection is arithmetic on stored columns
+        burn["cum_spend"] = (burn["productive_usd"] + burn["wasted_usd"]).cumsum().round(2)
+        burn["cum_frames"] = burn["frames"].cumsum()
 
         # Cinema runs on delivery dates, not only on budgets. The deadline column
         # exists in production_budgets and nothing used it until now.
@@ -167,9 +212,19 @@ def load_dashboard():
             "oom_waste": recoverable[0] or 0,
             "crash_waste": recoverable[1] or 0,
             "recoverable": (recoverable[0] or 0) + (recoverable[1] or 0),
+            "frames_done": int(progress["frames_done"].sum()),
+            "frames_target": int(progress["target_frames"].sum()),
+            "completion_pct": round(
+                100.0 * progress["frames_done"].sum()
+                / max(int(progress["target_frames"].sum()), 1), 1),
+            "forecast_total": round(float(progress["forecast_usd"].sum()), 2),
+            "forecast_overrun": round(float(progress["forecast_overrun"].sum()), 2),
+            "top_waster": artists.iloc[0]["artist_id"] if len(artists) else "N/A",
+            "top_waster_usd": float(artists.iloc[0]["wasted_usd"]) if len(artists) else 0.0,
         }
         frames = {"budget": budget, "waste": waste, "hotspots": hotspots,
-                  "burn": burn, "schedule": schedule}
+                  "burn": burn, "schedule": schedule,
+                  "progress": progress, "artists": artists}
         timing = {
             "total_ms": round(timer.total_ms, 1),
             "roundtrip_ms": round(timer.roundtrip_ms, 1),

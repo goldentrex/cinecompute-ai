@@ -23,7 +23,7 @@ Across 250,000 render events it finds **$97,885 of spend that produced no frame*
 faults**: Houdini Karma jobs hitting the 80 GB VRAM ceiling on SEQ_010_SPACE_BATTLE
 ($10,079), and an L40S pool crashing on SEQ_045_UNDERWATER ($55,919).
 
-It does four things a chat window does not:
+It does six things a chat window does not:
 
 **Writes its own SQL.** No pre-written queries. It inspects the schema, queries,
 reads the result, queries again, and only then answers: why it happens, what it
@@ -45,6 +45,25 @@ ever agrees is decoration.
 delivery date. Two sequences have already spent their budget with 38 and 55 days
 left before delivery, and the one that looks healthy on money has four days of
 runway for 85 days of calendar.
+
+**Forecasts where the money lands, not where it has been.** The telemetry carries
+frames delivered and frames ordered, so completion is measurable and a cost per
+delivered frame is computable — all spend over frames produced, failures included,
+which is precisely why a failed frame is expensive. The farm is 71.5% delivered
+for $387,998 and lands near **$546,315, $205,248 over the combined budgets**, if
+nothing changes. SEQ_010_SPACE_BATTLE has spent 100% of its budget for 58% of its
+frames: $207,692 forecast against $74,686 allocated, a 178% overrun. The dashboard
+draws that as one dashed line continuing the spend curve to 100% completion — an
+arithmetic extension, never a schedule prediction.
+
+**Puts a name on the waste without accusing anyone.** `artist_id` makes every
+failure traceable to the person who submitted it, which is easy to get wrong: a
+busy artist fails more often simply by submitting more. The agent is required to
+compute the artist's failure rate *and* the farm's in the same query, and may name
+someone only when the rate is out of line — artist_fx_07, 30.4% against a 15.8%
+farm average, $17,811 of failed compute, 82% of one project's memory kills. It
+then drafts a short note to that artist: the figures, the concrete scene change,
+an offer of help. No blame, no escalation. A supervisor edits and sends it.
 
 **Sweeps unprompted and emits the fix.** One click ranks every project × sequence
 × software × GPU slice: 12 systemic incidents, $57,836 recoverable. It exports

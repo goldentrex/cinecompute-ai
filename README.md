@@ -59,6 +59,15 @@ graph TD
 - **Reads the calendar.** Two sequences have already spent their budget with 38 and
   55 days left before delivery; the one that looks healthy on money has four days
   of runway for 85 days of calendar.
+- **Forecasts the landing point.** `frames_rendered` against `target_frames` gives a
+  completion ratio, and all spend over frames delivered gives a cost per frame. The farm
+  is 71.5% delivered for $387,998, so it lands near **$546,315 — $205,248 over the
+  combined budgets** if the cost per frame does not change. SEQ_010 alone: 58% of its
+  frames for 100% of its budget, landing at $207,692 against $74,686.
+- **Puts a name on the waste, carefully.** `artist_id` makes failures traceable. The agent
+  is required to compute the artist's failure rate *and* the farm's before naming anyone,
+  because a busy artist fails more often simply by submitting more — then drafts a short,
+  factual note offering help with the scene.
 - **Sweeps unprompted, and exports the fix.** One click ranks every project x
   sequence x software x GPU slice - 12 systemic incidents, $57,836 recoverable -
   and writes them out as scheduler rules a render manager can apply.
@@ -80,12 +89,22 @@ graph TD
 | cost_usd | Float32 | |
 | status | String | SUCCESS, OOM_KILLED, TIMEOUT, DRIVER_CRASH |
 | error_details | String | |
+| artist_id | String | 12 artists; who submitted the job |
+| frames_rendered | UInt16 | frames the task delivered — always 0 unless SUCCESS |
 
-`cinecompute.production_budgets` — `sequence_id`, `allocated_budget_usd`, `deadline`.
+`cinecompute.production_budgets` — `sequence_id`, `allocated_budget_usd`, `deadline`, `target_frames`.
 
-Two anomalies are engineered into the data:
+Three anomalies are engineered into the data:
 1. **DUNE_CH3 / SEQ_010_SPACE_BATTLE / Houdini_Karma** — ~48% `OOM_KILLED`, peaking above 78 GB on 80 GB cards.
 2. **SEQ_045_UNDERWATER on NVIDIA_L40S** — 60% `DRIVER_CRASH` with 3.2× runtime overhead.
+3. **artist_fx_07** — owns 82% of DUNE_CH3's memory kills, a 30.4% failure rate against a
+   15.8% farm average. Implemented as attribution over failures the generator had already
+   produced, so no count or cost changes.
+
+`artist_id` and `frames_rendered` are drawn from a separate random stream
+(`AUX_SEED`), never from the main one, so every figure published before they
+existed is unchanged. `seed_vfx_data.py` asserts those figures after each re-seed
+and fails the run if one has moved.
 
 Budgets are calibrated against the generated spend so SEQ_010 lands ~61% over, SEQ_045 ~14% over, and SEQ_080 ~13% under — regardless of the RNG.
 
