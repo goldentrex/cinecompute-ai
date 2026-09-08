@@ -204,17 +204,20 @@ CSS = f"""
     .step .t {{ color: {GAIN}; }}
 
     /* ---- buttons ---- */
-    .stButton > button {{
+    /* st.download_button renders as .stDownloadButton, not .stButton: styling only
+       the latter left the two controls under "Act on it" visibly different sizes. */
+    .stButton > button, .stDownloadButton > button {{
         background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 8px;
         padding: 13px 14px; font-size: 14px; font-weight: 550; color: {INK};
         line-height: 1.4; height: 100%; text-align: left;
         transition: border-color .12s, box-shadow .12s;
     }}
-    .stButton > button p, .stButton > button div {{
+    .stButton > button p, .stButton > button div,
+    .stDownloadButton > button p, .stDownloadButton > button div {{
         white-space: normal !important; overflow: visible !important;
         text-overflow: clip !important; line-height: 1.4;
     }}
-    .stButton > button:hover {{
+    .stButton > button:hover, .stDownloadButton > button:hover {{
         border-color: {PRIMARY}; color: {PRIMARY};
         box-shadow: 0 1px 3px rgba(37,99,235,.14);
     }}
@@ -235,6 +238,7 @@ CSS = f"""
     /* every interactive control gets the same visible focus ring, and only when
        reached by keyboard - mouse users do not see it */
     .stButton > button:focus-visible,
+    .stDownloadButton > button:focus-visible,
     [data-testid="stExpander"] summary:focus-visible,
     [data-testid="stChatInput"] textarea:focus-visible,
     a:focus-visible {{
@@ -242,9 +246,10 @@ CSS = f"""
         outline-offset: 2px;
         border-radius: 8px;
     }}
-    .stButton > button:active {{ transform: translateY(1px); }}
+    .stButton > button:active,
+    .stDownloadButton > button:active {{ transform: translateY(1px); }}
     /* WCAG 2.5.5: pointer targets stay at least 44px tall */
-    .stButton > button {{ min-height: 44px; }}
+    .stButton > button, .stDownloadButton > button {{ min-height: 44px; }}
     [data-testid="stExpander"] summary {{ min-height: 44px; display: flex; align-items: center; }}
 
     /* ---- loading skeletons ---- */
@@ -274,7 +279,8 @@ CSS = f"""
         .cards, .callout, .wfbox, [data-testid="stChatMessage"], .skel {{
             animation: none;
         }}
-        .stButton > button:active {{ transform: none; }}
+        .stButton > button:active,
+        .stDownloadButton > button:active {{ transform: none; }}
     }}
     @media (max-width: 860px) {{
         .cards {{ grid-template-columns: repeat(2, 1fr); }}
