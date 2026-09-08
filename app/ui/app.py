@@ -458,7 +458,7 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # --------------------------------------------------------------------------
 st.markdown('<div class="label">Act on it</div>', unsafe_allow_html=True)
 st.markdown(
-    '<p class="lead">The agent explains. These two do not ask it anything: they sweep '
+    '<p class="lede">The agent explains. These two do not ask it anything: they sweep '
     'the farm in SQL and turn what they find into scheduler rules you can hand to '
     'Deadline or Tractor.</p>',
     unsafe_allow_html=True,

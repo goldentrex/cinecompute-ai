@@ -157,7 +157,10 @@ CSS = f"""
         margin-top: 10px; padding-top: 10px; border-top: 1px solid {BORDER};
     }}
 
-    .lead {{
+    /* named .lede, not .lead: the hero metric card is `card lead`, and a bare
+       .lead rule silently restyled it - font, colour, line-height and a -4px
+       margin that pulled it 4px above its neighbours in the same grid row. */
+    .lede {{
         font-size: 14px; color: {MUTED}; line-height: 1.6;
         margin: -4px 0 var(--s3) 0; max-width: 720px;
     }}
