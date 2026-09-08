@@ -34,8 +34,12 @@ for key, default in (("messages", []), ("mcp_logs", []), ("live_calls", 0)):
     if key not in st.session_state:
         st.session_state[key] = default
 # A redeploy leaves already-open browser sessions holding an agent built by the
-# previous version of the code. Rebuild it when it predates the current class.
-if "agent" not in st.session_state or not hasattr(st.session_state.agent, "setup_error"):
+# previous version of the code, whose methods have the previous signatures: a
+# session open across the deploy that added `verify=` died with a TypeError at
+# the call site. Probing for one attribute was too narrow a test - an object from
+# a superseded module is not an instance of the class we just imported, so ask
+# that instead, which stays correct whatever changes next.
+if not isinstance(st.session_state.get("agent"), CineComputeAgent):
     st.session_state.agent = CineComputeAgent()
 
 PUBLIC_DEMO = os.environ.get("PUBLIC_DEMO", "").strip().lower() in ("1", "true", "yes")
